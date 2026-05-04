@@ -68,51 +68,90 @@ function getMockData(action: string) {
   return {};
 }
 
-// CRM Data Local Storage Helpers
-export function getCRMData() {
-  try {
-    return JSON.parse(localStorage.getItem('crm_data') || '{}');
-  } catch {
-    return {};
-  }
+// ── Local Storage Helpers ─────────────────────────────────────────────────────
+
+export function getCRMData(): Record<string, any> {
+  try { return JSON.parse(localStorage.getItem('crm_data') || '{}'); }
+  catch { return {}; }
 }
 
 export function saveCRMData(data: any) {
   localStorage.setItem('crm_data', JSON.stringify(data));
 }
 
-export function getEventsData() {
-  try {
-    return JSON.parse(localStorage.getItem('events_data') || '[]');
-  } catch {
-    return [];
-  }
+export function getEventsData(): any[] {
+  try { return JSON.parse(localStorage.getItem('events_data') || '[]'); }
+  catch { return []; }
 }
 
 export function saveEventsData(data: any[]) {
   localStorage.setItem('events_data', JSON.stringify(data));
 }
 
-export function getHolidayExtras() {
-  try {
-    return JSON.parse(localStorage.getItem('holiday_extras') || '{}');
-  } catch {
-    return {};
-  }
+export function getHolidayExtras(): Record<string, any> {
+  try { return JSON.parse(localStorage.getItem('holiday_extras') || '{}'); }
+  catch { return {}; }
 }
 
 export function saveHolidayExtras(data: any) {
   localStorage.setItem('holiday_extras', JSON.stringify(data));
 }
 
-export function getCustomHols() {
-  try {
-    return JSON.parse(localStorage.getItem('custom_hols') || '[]');
-  } catch {
-    return [];
-  }
+export function getCustomHols(): any[] {
+  try { return JSON.parse(localStorage.getItem('custom_hols') || '[]'); }
+  catch { return []; }
 }
 
 export function saveCustomHols(data: any[]) {
   localStorage.setItem('custom_hols', JSON.stringify(data));
+}
+
+// ── Cloud Sync (Google Sheets ← גיליון "🔄 סנכרון נתונים") ──────────────────
+
+export async function getCRMDataCloud(): Promise<Record<string, any>> {
+  try {
+    const res = await apiGet('getCRM');
+    if (res.data && !res._error) {
+      saveCRMData(res.data); // keep local in sync
+      return res.data;
+    }
+  } catch {}
+  return getCRMData();
+}
+
+export async function saveCRMDataCloud(data: Record<string, any>): Promise<void> {
+  saveCRMData(data);
+  apiPost('saveCRM', { data }).catch(console.error); // fire and forget
+}
+
+export async function getEventsDataCloud(): Promise<any[]> {
+  try {
+    const res = await apiGet('getEvents');
+    if (res.data && !res._error) {
+      saveEventsData(res.data);
+      return res.data;
+    }
+  } catch {}
+  return getEventsData();
+}
+
+export async function saveEventsDataCloud(data: any[]): Promise<void> {
+  saveEventsData(data);
+  apiPost('saveEvents', { data }).catch(console.error);
+}
+
+export async function getHolidayExtrasCloud(): Promise<Record<string, any>> {
+  try {
+    const res = await apiGet('getHolidayExtras');
+    if (res.data && !res._error) {
+      saveHolidayExtras(res.data);
+      return res.data;
+    }
+  } catch {}
+  return getHolidayExtras();
+}
+
+export async function saveHolidayExtrasCloud(data: Record<string, any>): Promise<void> {
+  saveHolidayExtras(data);
+  apiPost('saveHolidayExtras', { data }).catch(console.error);
 }
