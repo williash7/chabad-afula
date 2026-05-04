@@ -1,0 +1,20 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+
+# סביבה — לא לגיטהאב
+.env*
+!.env.example
+
+# Claude Code
+.claude/
+
+# קבצי בדיקה וניסוי
+testHeb.ts
+testHeb2.ts
+src/test-date.mjs
+app/
+workspace/
