@@ -1,0 +1,29 @@
+{
+  "name": "בית חב\"ד עפולה",
+  "short_name": "חב\"ד עפולה",
+  "description": "ניהול תורמים ואירועים",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF6EE",
+  "theme_color": "#C9A84C",
+  "lang": "he",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/maskable-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
