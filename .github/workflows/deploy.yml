@@ -1,4 +1,3 @@
-  name: Deploy to GitHub Pages
 
   on:
     push:
@@ -22,6 +21,8 @@
         - run: npm ci
 
         - run: npm run build
+          env:
+            VITE_BASE_PATH: /chabad-afula/
 
         - uses: peaceiris/actions-gh-pages@v4
           with:
