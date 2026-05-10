@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Pickaxe, MessageSquare, Phone, X, Edit, Calendar, PlusCircle, ClipboardList, RefreshCw, CalendarDays } from 'lucide-react';
+import { MessageSquare, Phone, X, Edit, Calendar, PlusCircle, ClipboardList, RefreshCw, CalendarDays, MapPin, Navigation } from 'lucide-react';
 import { format } from 'date-fns';
 import { DonationModal } from './DonationModal';
 import { MeetingModal } from './MeetingModal';
@@ -246,24 +246,41 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
         </div>
 
         {/* Actions */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
-           <button onClick={openWhatsApp} className="bg-green-50 text-green-700 border border-green-200 rounded-xl p-3 flex flex-col items-center justify-center gap-1 font-semibold text-sm">
-             <MessageSquare size={18} />
-             WhatsApp
-           </button>
-           <button onClick={() => crmData.phone ? window.open(`tel:${crmData.phone}`) : setEditingPhone(true)} className="bg-blue-50 text-blue-700 border border-blue-200 rounded-xl p-3 flex flex-col items-center justify-center gap-1 font-semibold text-sm">
-             <Phone size={18} />
-             התקשר
-           </button>
-           <button onClick={() => setIsDonationOpen(true)} className="bg-[#FEF3C7] text-[#92400E] border border-[#FCD34D] rounded-xl p-3 flex flex-col items-center justify-center gap-1 font-semibold text-sm">
-             <PlusCircle size={18} />
-             תרומה
-           </button>
-           <button onClick={() => setIsMeetingOpen(true)} className="bg-purple-50 text-purple-700 border border-purple-200 rounded-xl p-3 flex flex-col items-center justify-center gap-1 font-semibold text-sm">
-             <ClipboardList size={18} />
-             מפגש
-           </button>
-        </div>
+        {(() => {
+          const address = (donor as any)['כתובת'] || crmData.customFields?.['כתובת'] || '';
+          const mapsUrl = address
+            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address + ' עפולה')}`
+            : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' עפולה')}`;
+          return (
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <button onClick={openWhatsApp} className="bg-green-50 text-green-700 border border-green-200 rounded-xl p-3 flex flex-col items-center justify-center gap-1 font-semibold text-sm">
+                <MessageSquare size={18} />
+                WhatsApp
+              </button>
+              <button onClick={() => crmData.phone ? window.open(`tel:${crmData.phone}`) : setEditingPhone(true)} className="bg-blue-50 text-blue-700 border border-blue-200 rounded-xl p-3 flex flex-col items-center justify-center gap-1 font-semibold text-sm">
+                <Phone size={18} />
+                התקשר
+              </button>
+              <button onClick={() => setIsDonationOpen(true)} className="bg-[#FEF3C7] text-[#92400E] border border-[#FCD34D] rounded-xl p-3 flex flex-col items-center justify-center gap-1 font-semibold text-sm">
+                <PlusCircle size={18} />
+                תרומה
+              </button>
+              <button onClick={() => setIsMeetingOpen(true)} className="bg-purple-50 text-purple-700 border border-purple-200 rounded-xl p-3 flex flex-col items-center justify-center gap-1 font-semibold text-sm">
+                <ClipboardList size={18} />
+                מפגש
+              </button>
+              <a
+                href={mapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="col-span-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl p-3 flex items-center justify-center gap-2 font-semibold text-sm hover:bg-blue-100 transition-colors"
+              >
+                <Navigation size={18} />
+                {address ? `נווט לכתובת: ${address}` : 'חיפוש כתובת במפה'}
+              </a>
+            </div>
+          );
+        })()}
 
         {/* Dynamic Fields Details */}
         <div className="bg-white rounded-2xl p-4 shadow-sm mb-5">
@@ -293,13 +310,31 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
             {(() => {
                const combined = { ...donor, ...(crmData.customFields || {}) };
                const keys = Object.keys(combined).filter(k => !['name','total','donations','lastDate'].includes(k) && !/^\d+$/.test(k));
+               const isAddressKey = (k: string) => ['כתובת', 'address', 'רחוב', 'עיר'].some(t => k.toLowerCase().includes(t));
+               const openInMaps = (addr: string) => {
+                 window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr + ' עפולה')}`, '_blank');
+               };
                if (keys.length > 0) {
-                 return keys.map(key => (
-                   <div key={key} className="flex flex-col border-b border-gray-50 pb-2.5 last:border-0 last:pb-0">
-                     <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">{key}</span>
-                     <span className="text-[13px] font-medium text-[#0D1B2A] leading-relaxed">{(combined as any)[key] || '—'}</span>
-                   </div>
-                 ));
+                 return keys.map(key => {
+                   const val = (combined as any)[key] || '';
+                   const isAddr = isAddressKey(key);
+                   return (
+                     <div key={key} className="flex flex-col border-b border-gray-50 pb-2.5 last:border-0 last:pb-0">
+                       <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">{key}</span>
+                       <div className="flex items-center justify-between gap-2">
+                         <span className="text-[13px] font-medium text-[#0D1B2A] leading-relaxed flex-1">{val || '—'}</span>
+                         {isAddr && val && (
+                           <button
+                             onClick={() => openInMaps(val)}
+                             className="shrink-0 flex items-center gap-1 bg-blue-50 text-blue-600 px-2.5 py-1 rounded-lg text-[11px] font-bold hover:bg-blue-100 transition-colors"
+                           >
+                             <MapPin size={12} /> מפה
+                           </button>
+                         )}
+                       </div>
+                     </div>
+                   );
+                 });
                } else {
                  return (
                    <div className="text-center py-6">

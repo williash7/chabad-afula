@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Search, RefreshCw, Target, Plus, Users } from 'lucide-react';
+import { Search, RefreshCw, Plus, Users, Map, Navigation, MapPin, X } from 'lucide-react';
 import { Donor } from '../types';
 import { ProfileModal } from './ProfileModal';
 
@@ -13,6 +13,7 @@ export function DonorsTab() {
 
   const [isAddContactOpen, setIsAddContactOpen] = useState(false);
   const [newContactName, setNewContactName] = useState('');
+  const [isMapOpen, setIsMapOpen] = useState(false);
 
   const submitNewContact = async () => {
     const name = newContactName.trim();
@@ -121,6 +122,13 @@ export function DonorsTab() {
           <div className="text-[11px] text-white/45 mt-[1px]">{list.length} רשומות</div>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => setIsMapOpen(true)}
+            className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0 hover:bg-white/20 transition-colors"
+            title="מסלול ביקורים"
+          >
+            <Map size={17} />
+          </button>
           <button
             onClick={() => setIsAddContactOpen(true)}
             className="flex items-center gap-1.5 px-3 h-9 bg-[#C9A84C] text-[#0D1B2A] rounded-full text-sm font-bold shadow-md transition-transform active:scale-95"
@@ -323,6 +331,111 @@ export function DonorsTab() {
       )}
 
       {selectedDonor && <ProfileModal name={selectedDonor} onClose={() => setSelectedDonor(null)} />}
+
+      {/* Map / Route modal */}
+      {isMapOpen && (() => {
+        const withAddress = list
+          .map(d => ({
+            name: d.name,
+            address: (d as any)['כתובת'] || crm[d.name]?.customFields?.['כתובת'] || '',
+          }))
+          .filter(d => d.address);
+
+        const openRoute = (addrs: string[]) => {
+          if (addrs.length === 0) return;
+          const encoded = addrs.map(a => encodeURIComponent(a + ' עפולה'));
+          const url = addrs.length === 1
+            ? `https://www.google.com/maps/search/?api=1&query=${encoded[0]}`
+            : `https://www.google.com/maps/dir/${encoded.join('/')}`;
+          window.open(url, '_blank');
+        };
+
+        return (
+          <div className="fixed inset-0 bg-black/50 z-[200] flex items-end md:items-center justify-center p-0 md:p-4 backdrop-blur-sm"
+            onClick={e => e.target === e.currentTarget && setIsMapOpen(false)}>
+            <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl w-full max-w-[430px] md:max-w-xl max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
+              {/* Header */}
+              <div className="sticky top-0 bg-[#0D1B2A] px-5 py-4 flex items-center justify-between rounded-t-3xl md:rounded-t-3xl">
+                <div className="flex items-center gap-3">
+                  <Map size={20} className="text-[#C9A84C]" />
+                  <div>
+                    <div className="font-['Frank_Ruhl_Libre'] text-base font-bold text-[#C9A84C]">מסלול ביקורים</div>
+                    <div className="text-[11px] text-white/40">{withAddress.length} אנשי קשר עם כתובת</div>
+                  </div>
+                </div>
+                <button onClick={() => setIsMapOpen(false)} className="p-2 bg-white/10 rounded-full text-white/70">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-5">
+                {withAddress.length === 0 ? (
+                  <div className="text-center py-10">
+                    <MapPin size={36} className="mx-auto mb-3 text-gray-300" />
+                    <p className="text-sm text-gray-500">אין אנשי קשר עם כתובת ברשימה הנוכחית.</p>
+                    <p className="text-xs text-gray-400 mt-1">הוסף כתובות בכרטיס האיש ← ערוך הכל ← שדה "כתובת"</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Quick actions */}
+                    <div className="grid grid-cols-2 gap-3 mb-5">
+                      <button
+                        onClick={() => openRoute(withAddress.slice(0, 10).map(d => d.address))}
+                        className="flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-3 rounded-xl text-sm active:scale-95 transition-transform shadow-md"
+                      >
+                        <Navigation size={16} />
+                        מסלול כל הרשימה
+                      </button>
+                      <button
+                        onClick={() => {
+                          const close = withAddress.filter(d => crm[d.name]?.circle === 'close').slice(0, 10);
+                          if (close.length) openRoute(close.map(d => d.address));
+                          else alert('אין אנשי קשר קרובים עם כתובת ברשימה הנוכחית');
+                        }}
+                        className="flex items-center justify-center gap-2 bg-green-600 text-white font-bold py-3 rounded-xl text-sm active:scale-95 transition-transform shadow-md"
+                      >
+                        <Navigation size={16} />
+                        ⭐ מסלול קרובים
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-gray-400 mb-3 text-center">לחץ על כתובת לפתיחה במפה, או בחר עד 10 עצירות למסלול</div>
+
+                    {/* Address list */}
+                    <div className="space-y-2">
+                      {withAddress.map((d, i) => (
+                        <div key={i} className="bg-white rounded-xl p-3 border border-[#EDE6D6] flex items-center gap-3 shadow-sm">
+                          <div
+                            className="w-9 h-9 rounded-full flex justify-center items-center text-white font-['Frank_Ruhl_Libre'] font-bold text-sm shrink-0"
+                            style={{ background: getAvatarColor(d.name) }}
+                          >
+                            {d.name.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-bold text-[#0D1B2A]">{d.name}</div>
+                            <div className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
+                              <MapPin size={10} className="shrink-0" />
+                              <span className="truncate">{d.address}</span>
+                            </div>
+                          </div>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(d.address + ' עפולה')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors"
+                            title="פתח במפה"
+                          >
+                            <Navigation size={16} />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {isAddContactOpen && (
         <div className="fixed inset-0 bg-[#0D1B2A]/40 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4" dir="rtl">
