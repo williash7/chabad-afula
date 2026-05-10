@@ -1,8 +1,16 @@
 export const HEBCAL_API = 'https://www.hebcal.com/shabbat?cfg=json&city=Afula&M=on';
 
+// On Render: relative /api/gs is served by Express.
+// On GitHub Pages (static): VITE_API_URL points to the Render backend.
+const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+
 export async function apiGet(action: string) {
   try {
-    const r = await fetch(`/api/gs?action=${action}`);
+    const r = await fetch(`${API_BASE}/api/gs?action=${action}`);
+    if (r.status === 404) {
+      // No backend available (static deployment) – silently use local fallback
+      return getMockData(action);
+    }
     const data = await r.json();
     if (!r.ok) {
       console.error(`API Error for ${action}:`, data.details || data.error);
@@ -17,11 +25,12 @@ export async function apiGet(action: string) {
 
 export async function apiPost(action: string, data: any) {
   try {
-    const r = await fetch('/api/gs', {
+    const r = await fetch(`${API_BASE}/api/gs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...data, action }),
     });
+    if (r.status === 404) return { success: false };
     const res = await r.json();
     if (!r.ok) throw new Error(res.details || res.error);
     return res;
