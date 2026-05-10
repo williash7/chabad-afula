@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { createHolidayDoc } from '../lib/api';
-import { X, Check, MessageSquare, FileText, ExternalLink, Loader2 } from 'lucide-react';
+import { X, Check, MessageSquare, FileText, ExternalLink, Loader2, Download } from 'lucide-react';
 
 export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () => void }) {
   const { holidayExtras, updateHolidayExtras, donors, crm, hk, failures } = useAppStore();
@@ -127,6 +127,144 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
     setAddTaskText('');
   };
 
+  const handleExportReport = () => {
+    const dateLabel = hDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
+    const tasks = extra.tasks || [];
+    const tasksDone = tasks.filter((t: any) => t.done).length;
+    const reminders = extra.reminders || [];
+    const docs = extra.docs || [];
+    const budget = extra.budget || { expenses: [], income: [] };
+    const exps = budget.expenses || [];
+    const incs = budget.income || [];
+    const totalExpPlan = exps.reduce((s: number, e: any) => s + (Number(e.planned) || 0), 0);
+    const totalExpAct  = exps.reduce((s: number, e: any) => s + (Number(e.actual)  || 0), 0);
+    const totalIncPlan = incs.reduce((s: number, i: any) => s + (Number(i.planned) || 0), 0);
+    const totalIncAct  = incs.reduce((s: number, i: any) => s + (Number(i.actual)  || 0), 0);
+    const insights = extra.insights || {};
+
+    const row = (label: string, val: string) =>
+      `<tr><td class="label">${label}</td><td>${val || '—'}</td></tr>`;
+
+    const section = (title: string, body: string) =>
+      `<div class="section"><h2>${title}</h2>${body}</div>`;
+
+    const html = `<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>דוח חג — ${holiday.name}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Heebo', sans-serif; background: #fff; color: #1a1a2e; padding: 32px; direction: rtl; font-size: 13px; }
+  .header { background: linear-gradient(135deg,#0D1B2A,#1A2E45); color: white; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 24px; font-weight: 900; color: #C9A84C; }
+  .header .sub { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 4px; }
+  .header .days { background: rgba(201,168,76,0.15); border: 1px solid rgba(201,168,76,0.3); border-radius: 10px; padding: 10px 16px; text-align: center; }
+  .header .days span { display: block; font-size: 28px; font-weight: 900; color: #C9A84C; line-height: 1; }
+  .header .days small { font-size: 10px; color: rgba(255,255,255,0.4); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .kpi { background: #FAF6EE; border: 1px solid #EDE6D6; border-radius: 10px; padding: 14px 16px; }
+  .kpi .val { font-size: 22px; font-weight: 900; color: #0D1B2A; }
+  .kpi .lbl { font-size: 10px; color: #9B7A2F; text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+  .section { background: #fff; border: 1px solid #EDE6D6; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .section h2 { font-size: 14px; font-weight: 900; color: #0D1B2A; border-bottom: 2px solid #EDE6D6; padding-bottom: 8px; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: #0D1B2A; color: #C9A84C; font-size: 10px; padding: 6px 10px; text-align: right; }
+  td { padding: 7px 10px; border-bottom: 1px solid #f0ebe0; vertical-align: top; }
+  td.label { font-weight: 700; color: #555; width: 120px; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; border-radius: 4px; padding: 2px 7px; font-size: 10px; font-weight: 700; }
+  .done { background: #D1FAE5; color: #065F46; }
+  .pending { background: #FEF3C7; color: #92400E; }
+  .income { color: #059669; font-weight: 700; }
+  .expense { color: #DC2626; font-weight: 700; }
+  .balance { font-size: 16px; font-weight: 900; }
+  .insight-block { background: #FAF6EE; border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; font-size: 12px; }
+  .insight-block .lbl { font-size: 10px; font-weight: 700; color: #9B7A2F; text-transform: uppercase; margin-bottom: 4px; }
+  .meta { font-size: 10px; color: #999; text-align: center; margin-top: 24px; padding-top: 12px; border-top: 1px solid #EDE6D6; }
+  @media print { body { padding: 16px; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:4px">בית חבד עפולה — דוח חג</div>
+    <h1>${holiday.emoji || '✡️'} ${holiday.name}</h1>
+    <div class="sub">${dateLabel}</div>
+  </div>
+  <div class="days">
+    <span>${days > 0 ? days : '—'}</span>
+    <small>${days > 0 ? 'ימים לחג' : 'החג עבר'}</small>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="kpi">
+    <div class="val">${extra.lastYear?.donors || '—'}</div>
+    <div class="lbl">👥 תורמים אשתקד</div>
+  </div>
+  <div class="kpi">
+    <div class="val">${extra.lastYear?.amount ? '₪' + Number(extra.lastYear.amount).toLocaleString() : '—'}</div>
+    <div class="lbl">💰 גיוס אשתקד</div>
+  </div>
+  <div class="kpi">
+    <div class="val">${tasksDone}/${tasks.length}</div>
+    <div class="lbl">📋 משימות הושלמו</div>
+  </div>
+  <div class="kpi">
+    <div class="val">${(totalIncAct - totalExpAct) !== 0 ? '₪' + (totalIncAct - totalExpAct).toLocaleString() : '—'}</div>
+    <div class="lbl">📈 מאזן בפועל</div>
+  </div>
+</div>
+
+${tasks.length > 0 ? section('📋 משימות',
+  `<table>
+    <tr><th>משימה</th><th style="width:80px">סטטוס</th></tr>
+    ${tasks.map((t: any) => `<tr><td>${t.text}</td><td><span class="badge ${t.done ? 'done' : 'pending'}">${t.done ? '✓ הושלם' : '⏳ פתוח'}</span></td></tr>`).join('')}
+  </table>`) : ''}
+
+${(exps.length > 0 || incs.length > 0) ? section('💰 תקציב',
+  `<table>
+    <tr><th>סעיף</th><th>סוג</th><th style="width:80px">מתוכנן</th><th style="width:80px">בפועל</th></tr>
+    ${exps.map((e: any) => `<tr><td>${e.name}</td><td>הוצאה</td><td>₪${Number(e.planned||0).toLocaleString()}</td><td class="expense">₪${Number(e.actual||0).toLocaleString()}</td></tr>`).join('')}
+    ${incs.map((i: any) => `<tr><td>${i.name}</td><td>הכנסה</td><td>₪${Number(i.planned||0).toLocaleString()}</td><td class="income">₪${Number(i.actual||0).toLocaleString()}</td></tr>`).join('')}
+    <tr style="background:#FAF6EE;font-weight:700">
+      <td colspan="2">סיכום</td>
+      <td>₪${(totalExpPlan + totalIncPlan).toLocaleString()}</td>
+      <td class="balance ${(totalIncAct - totalExpAct) >= 0 ? 'income' : 'expense'}">₪${(totalIncAct - totalExpAct).toLocaleString()}</td>
+    </tr>
+  </table>`) : ''}
+
+${(insights.good || insights.improve || insights.plan) ? section('📝 תובנות וסיכום',
+  `${insights.good ? `<div class="insight-block"><div class="lbl">✅ מה עבד טוב</div>${insights.good}</div>` : ''}
+   ${insights.improve ? `<div class="insight-block"><div class="lbl">📈 מה לשפר</div>${insights.improve}</div>` : ''}
+   ${insights.plan ? `<div class="insight-block"><div class="lbl">🗓️ תוכנית לשנה הבאה</div>${insights.plan}</div>` : ''}`) : ''}
+
+${reminders.length > 0 ? section('🔔 תזכורות',
+  `<table>
+    <tr><th>תזכורת</th><th style="width:100px">לפני החג</th><th style="width:80px">WhatsApp</th></tr>
+    ${reminders.map((r: any) => `<tr><td>${r.title}</td><td>${r.days} ימים</td><td>${r.wa ? '✓' : '—'}</td></tr>`).join('')}
+  </table>`) : ''}
+
+${docs.length > 0 ? section('📄 מסמכים מקושרים',
+  `<table>
+    <tr><th>שם המסמך</th><th style="width:140px">תאריך יצירה</th><th style="width:100px">קישור</th></tr>
+    ${docs.map((d: any) => `<tr><td>${d.title}</td><td>${new Date(d.createdAt).toLocaleDateString('he-IL')}</td><td><a href="${d.url}" target="_blank">פתח מסמך</a></td></tr>`).join('')}
+  </table>`) : ''}
+
+<div class="meta">נוצר על ידי מערכת בית חבד עפולה · ${new Date().toLocaleDateString('he-IL', { day:'numeric', month:'long', year:'numeric' })}</div>
+</body>
+</html>`;
+
+    const w = window.open('', '_blank', 'width=800,height=900');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 400);
+  };
+
   // Derived relative donors
   const relDonors = Object.values(donors).filter((d: any) => {
     return d.donations?.some((don: any) => {
@@ -145,9 +283,19 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
             <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">{holiday.hebrew || 'אירוע'}</div>
             <h2 className="font-['Frank_Ruhl_Libre'] text-2xl font-bold text-[#0D1B2A]">{holiday.name}</h2>
           </div>
-          <button onClick={onClose} className="p-2 bg-gray-200/50 rounded-full text-gray-500 hover:bg-gray-200">
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportReport}
+              title="ייצוא דוח"
+              className="flex items-center gap-1.5 px-3 py-2 bg-[#C9A84C]/10 text-[#9B7A2F] rounded-xl text-xs font-bold hover:bg-[#C9A84C]/20 transition-colors"
+            >
+              <Download size={14} />
+              ייצוא דוח
+            </button>
+            <button onClick={onClose} className="p-2 bg-gray-200/50 rounded-full text-gray-500 hover:bg-gray-200">
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="bg-gradient-to-br from-[#2D1B69] to-[#4A2E8C] rounded-2xl p-4 text-white mb-5 flex items-center gap-4 relative overflow-hidden">
