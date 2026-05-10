@@ -1,0 +1,93 @@
+import React from 'react';
+import { Home, Users, CalendarDays, PieChart, CalendarCheck, Plus, ImageIcon, RefreshCw } from 'lucide-react';
+import { useAppStore } from '../store/AppContext';
+
+interface SideNavProps {
+  currentTab: string;
+  setTab: (tab: string) => void;
+  onDonationClick: () => void;
+}
+
+export function SideNav({ currentTab, setTab, onDonationClick }: SideNavProps) {
+  const { hebrewDate, summary, refresh } = useAppStore();
+
+  const navItems = [
+    { id: 'home',     icon: Home,         label: 'דשבורד' },
+    { id: 'donors',   icon: Users,         label: 'אנשי קשר' },
+    { id: 'events',   icon: CalendarCheck, label: 'אירועים' },
+    { id: 'calendar', icon: CalendarDays,  label: 'חגים' },
+    { id: 'reports',  icon: PieChart,      label: 'דוחות' },
+    { id: 'poster',   icon: ImageIcon,     label: 'פוסטר שבת' },
+  ];
+
+  return (
+    <aside className="hidden md:flex flex-col w-60 bg-[#0D1B2A] fixed right-0 top-0 h-screen z-50 border-l border-white/10">
+      {/* Branding */}
+      <div className="p-5 border-b border-white/10">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 bg-gradient-to-br from-[#C9A84C] to-[#9B7A2F] rounded-xl flex items-center justify-center font-['Frank_Ruhl_Libre'] text-2xl text-white font-black shrink-0">
+            ח
+          </div>
+          <div className="min-w-0">
+            <div className="font-['Frank_Ruhl_Libre'] text-sm font-bold text-[#C9A84C] leading-tight">בית חבד עפולה</div>
+            <div className="text-[10px] text-white/40 mt-0.5 truncate">{hebrewDate}</div>
+          </div>
+        </div>
+
+        {/* Quick summary */}
+        {summary && (
+          <div className="mt-4 bg-white/5 rounded-xl p-3 border border-white/10">
+            <div className="text-[10px] text-white/40 uppercase tracking-wide mb-1">סה"כ תרומות</div>
+            <div className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#E8C97A]">
+              ₪{summary.total?.toLocaleString() || 0}
+            </div>
+            <div className="text-[10px] text-white/30 mt-0.5">החודש: ₪{summary.thisMonthTotal?.toLocaleString() || 0}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+        {navItems.map(item => {
+          const Icon = item.icon;
+          const isActive = currentTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setTab(item.id)}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                isActive
+                  ? 'bg-[#C9A84C]/15 text-[#C9A84C] border border-[#C9A84C]/20'
+                  : 'text-white/50 hover:text-white/80 hover:bg-white/5 border border-transparent'
+              }`}
+            >
+              <Icon size={17} />
+              {item.label}
+              {item.id === 'home' && isActive && (
+                <span className="mr-auto w-1.5 h-1.5 rounded-full bg-[#C9A84C]" />
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Bottom actions */}
+      <div className="p-4 border-t border-white/10 space-y-2">
+        <button
+          onClick={onDonationClick}
+          className="w-full flex items-center justify-center gap-2 bg-gradient-to-br from-[#C9A84C] to-[#9B7A2F] text-white font-bold py-2.5 rounded-xl text-sm shadow-lg hover:opacity-90 active:scale-95 transition-all"
+        >
+          <Plus size={16} />
+          הוסף תרומה
+        </button>
+        <button
+          onClick={() => refresh()}
+          className="w-full flex items-center justify-center gap-2 text-white/30 hover:text-white/55 py-1.5 rounded-xl text-xs transition-colors"
+        >
+          <RefreshCw size={12} />
+          רענן נתונים
+        </button>
+      </div>
+    </aside>
+  );
+}

@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AppProvider, useAppStore } from './store/AppContext';
 import { BottomNav } from './components/BottomNav';
+import { SideNav } from './components/SideNav';
 import { LoadingScreen } from './components/LoadingScreen';
 import { HomeTab } from './components/HomeTab';
 import { DonorsTab } from './components/DonorsTab';
@@ -21,26 +22,34 @@ function AppContent() {
   }
 
   return (
-    <div className="relative min-h-screen pb-20 font-sans bg-[#FAF6EE]" dir="rtl">
-      {apiError && (
-        <div className="bg-red-500 text-white p-3 text-sm font-bold text-center w-full z-50 shadow-md">
-          ⚠️ שגיאת חיבור לסנכרון נתונים
-          <div className="text-xs font-normal mt-1 bg-red-600 p-2 rounded-md opacity-90">{apiError}</div>
-          <div className="text-xs font-normal mt-1 opacity-90">האפליקציה פועלת במצב מידע הדגמה חלקי מקומי.</div>
-        </div>
-      )}
-      {activeTab === 'home' && <HomeTab setTab={setActiveTab} onDonationClick={() => setIsDonationOpen(true)} />}
-      {activeTab === 'donors' && <DonorsTab />}
-      {activeTab === 'events' && <EventsTab />}
-      {activeTab === 'calendar' && <CalendarTab />}
-      {activeTab === 'reports' && <ReportsTab />}
-      {activeTab === 'poster' && <PosterTab onClose={() => setActiveTab('home')} />}
-      
+    <div className="relative min-h-screen font-sans bg-[#FAF6EE]" dir="rtl">
+      {/* Desktop sidebar */}
+      <SideNav currentTab={activeTab} setTab={setActiveTab} onDonationClick={() => setIsDonationOpen(true)} />
+
+      {/* Main content — on desktop pushed left of the sidebar */}
+      <div className="min-h-screen pb-20 md:pb-6 md:mr-60">
+        {apiError && (
+          <div className="bg-red-500 text-white p-3 text-sm font-bold text-center w-full z-50 shadow-md">
+            ⚠️ שגיאת חיבור לסנכרון נתונים
+            <div className="text-xs font-normal mt-1 bg-red-600 p-2 rounded-md opacity-90">{apiError}</div>
+            <div className="text-xs font-normal mt-1 opacity-90">האפליקציה פועלת במצב מידע הדגמה חלקי מקומי.</div>
+          </div>
+        )}
+        {activeTab === 'home' && <HomeTab setTab={setActiveTab} onDonationClick={() => setIsDonationOpen(true)} />}
+        {activeTab === 'donors' && <DonorsTab />}
+        {activeTab === 'events' && <EventsTab />}
+        {activeTab === 'calendar' && <CalendarTab />}
+        {activeTab === 'reports' && <ReportsTab />}
+        {activeTab === 'poster' && <PosterTab onClose={() => setActiveTab('home')} />}
+      </div>
+
+      {/* Mobile bottom nav */}
       <BottomNav currentTab={activeTab} setTab={setActiveTab} />
 
-      <button 
+      {/* Mobile FAB */}
+      <button
         onClick={() => setIsDonationOpen(true)}
-        className="fixed bottom-[82px] left-1/2 -translate-x-[180px] w-[52px] h-[52px] bg-gradient-to-br from-[#C9A84C] to-[#9B7A2F] rounded-full flex items-center justify-center text-white shadow-lg z-40 active:scale-95 transition-transform"
+        className="fixed bottom-[82px] left-1/2 -translate-x-[180px] w-[52px] h-[52px] bg-gradient-to-br from-[#C9A84C] to-[#9B7A2F] rounded-full flex items-center justify-center text-white shadow-lg z-40 active:scale-95 transition-transform md:hidden"
       >
         <Plus size={24} />
       </button>

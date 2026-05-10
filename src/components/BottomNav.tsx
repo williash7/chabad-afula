@@ -16,7 +16,7 @@ export function BottomNav({ currentTab, setTab }: BottomNavProps) {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-[#0D1B2A] flex py-2 pb-6 z-50 border-t border-[rgba(201,168,76,0.15)]">
+    <nav className="md:hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-[#0D1B2A] flex py-2 pb-6 z-50 border-t border-[rgba(201,168,76,0.15)]">
       {navItems.map(item => {
         const Icon = item.icon;
         const isActive = currentTab === item.id;
