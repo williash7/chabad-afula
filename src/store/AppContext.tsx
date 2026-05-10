@@ -57,7 +57,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const loadHebcal = () => {
     fetch('https://www.hebcal.com/shabbat?cfg=json&city=Afula&M=on')
       .then(r => r.json())
-      .then(data => setShabbat(data))
+      .then(data => {
+        // Hebcal ignores m= for named cities and returns 18 min before sunset.
+        // Afula minhag is 30 min — subtract 12 min from the candle lighting time.
+        if (data.items) {
+          data.items = data.items.map((item: any) =>
+            item.category === 'candles'
+              ? { ...item, date: new Date(new Date(item.date).getTime() - 12 * 60000).toISOString() }
+              : item
+          );
+        }
+        setShabbat(data);
+      })
       .catch(console.error);
 
     const today = new Date();
