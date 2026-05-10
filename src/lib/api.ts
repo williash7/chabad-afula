@@ -164,3 +164,9 @@ export async function saveHolidayExtrasCloud(data: Record<string, any>): Promise
   saveHolidayExtras(data);
   apiPost('saveHolidayExtras', { data }).catch(console.error);
 }
+
+export async function createHolidayDoc(holidayName: string, dateStr: string): Promise<{ url: string; title: string } | null> {
+  const res = await apiPost('createHolidayDoc', { holidayName, dateStr });
+  if (res.success && res.url) return { url: res.url, title: res.title };
+  return null;
+}

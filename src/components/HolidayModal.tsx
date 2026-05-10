@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { X, Check, MessageSquare } from 'lucide-react';
+import { createHolidayDoc } from '../lib/api';
+import { X, Check, MessageSquare, FileText, ExternalLink, Loader2 } from 'lucide-react';
 
 export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () => void }) {
   const { holidayExtras, updateHolidayExtras, donors, crm, hk, failures } = useAppStore();
@@ -14,6 +15,8 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
   const [isEditingLastYear, setIsEditingLastYear] = useState(false);
   const [isAddingReminder, setIsAddingReminder] = useState(false);
   const [addTaskText, setAddTaskText] = useState('');
+  const [isCreatingDoc, setIsCreatingDoc] = useState(false);
+  const [docError, setDocError] = useState<string | null>(null);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -82,6 +85,27 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
     updateHolidayExtras(id, { reminders: nextReminders });
     setIsAddingReminder(false);
     setReminderForm({ title: '', days: '7', wa: false });
+  };
+
+  const handleCreateDoc = async () => {
+    setIsCreatingDoc(true);
+    setDocError(null);
+    const dateLabel = hDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
+    const result = await createHolidayDoc(holiday.name, dateLabel);
+    if (result) {
+      const nextDocs = [...(extra.docs || []), { url: result.url, title: result.title, createdAt: new Date().toISOString() }];
+      updateHolidayExtras(id, { docs: nextDocs });
+      window.open(result.url, '_blank');
+    } else {
+      setDocError('לא ניתן ליצור מסמך. וודא שה-GAS מעודכן ויש חיבור לשרת.');
+    }
+    setIsCreatingDoc(false);
+  };
+
+  const deleteDoc = (idx: number) => {
+    const nextDocs = [...(extra.docs || [])];
+    nextDocs.splice(idx, 1);
+    updateHolidayExtras(id, { docs: nextDocs });
   };
 
   const deleteReminder = (idx: number) => {
@@ -493,6 +517,51 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
               ) : <div className="text-sm text-gray-400 text-center py-2">לחץ עריכה להוספת תובנות</div>}
             </div>
           )}
+        </div>
+
+        {/* Documents Section */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A]">📄 מסמכים</h3>
+            <button
+              onClick={handleCreateDoc}
+              disabled={isCreatingDoc}
+              className="text-xs font-bold text-[#9B7A2F] bg-[#C9A84C]/10 px-3 py-1.5 rounded-lg active:scale-95 transition-transform flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {isCreatingDoc ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+              {isCreatingDoc ? 'יוצר...' : 'צור מסמך Google'}
+            </button>
+          </div>
+
+          {docError && (
+            <div className="bg-red-50 text-red-600 text-xs rounded-xl p-3 mb-3 border border-red-200">{docError}</div>
+          )}
+
+          <div className="space-y-2">
+            {(extra.docs || []).length > 0 ? (extra.docs || []).map((doc: any, i: number) => (
+              <div key={i} className="bg-white rounded-xl p-3 shadow-sm flex items-center justify-between border border-[#EDE6D6]">
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileText size={18} className="text-[#4285F4] shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-[#0D1B2A] truncate">{doc.title}</div>
+                    <div className="text-[10px] text-gray-400">{new Date(doc.createdAt).toLocaleDateString('he-IL')}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-[#4285F4] bg-blue-50 p-2 rounded-lg hover:bg-blue-100">
+                    <ExternalLink size={14} />
+                  </a>
+                  <button onClick={() => deleteDoc(i)} className="text-red-400 bg-red-50 p-2 rounded-lg hover:bg-red-100">
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )) : (
+              <div className="text-sm text-gray-400 text-center bg-gray-50 rounded-xl p-3">
+                לחץ "צור מסמך Google" ליצירת מסמך תכנון מקושר לחג
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Related Donors */}
