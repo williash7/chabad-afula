@@ -138,8 +138,8 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
   }).slice(0, 5) as any[];
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[200] flex items-end justify-center p-0 md:p-4 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl p-5 pb-10 w-full max-w-[430px] max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
+    <div className="fixed inset-0 bg-black/60 z-[200] flex items-end md:items-center justify-center p-0 md:p-4 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl p-5 pb-10 md:pb-6 w-full max-w-[430px] md:max-w-2xl max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
         <div className="flex justify-between items-start mb-4">
           <div>
             <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">{holiday.hebrew || 'אירוע'}</div>

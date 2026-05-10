@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Search, Star, RefreshCw, Target, AlertTriangle, Plus, Users } from 'lucide-react';
+import { Search, RefreshCw, Target, Plus, Users } from 'lucide-react';
 import { Donor } from '../types';
 import { ProfileModal } from './ProfileModal';
 
@@ -14,10 +14,6 @@ export function DonorsTab() {
   const [isAddContactOpen, setIsAddContactOpen] = useState(false);
   const [newContactName, setNewContactName] = useState('');
 
-  const handleAddContactClick = () => {
-    setIsAddContactOpen(true);
-  };
-
   const submitNewContact = async () => {
     const name = newContactName.trim();
     if (!name) return;
@@ -25,17 +21,12 @@ export function DonorsTab() {
       alert('איש קשר בשם זה כבר קיים');
       return;
     }
-    
     setIsAddContactOpen(false);
     setNewContactName('');
-    
     const { apiPost, saveCRMData, getCRMData } = await import('../lib/api');
     await apiPost('updateDonorField', { name, field: 'מקור', value: 'אפליקציה' });
-    
-    // Also save an empty entry in local CRM to immediately display it in the list
     const currentCrm = getCRMData();
     saveCRMData({ ...currentCrm, [name]: { circle: 'far' } });
-    
     refresh();
     setSelectedDonor(name);
   };
@@ -50,17 +41,14 @@ export function DonorsTab() {
       'linear-gradient(135deg,#D97706,#92400E)'
     ];
     let h = 0;
-    for (let i = 0; i < name.length; i++) {
-      h = (h * 31 + name.charCodeAt(i)) % c.length;
-    }
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % c.length;
     return c[Math.abs(h)];
   };
 
   const hkNames = new Set(hk.filter(h => h.active).map(h => h.name));
   const errNames = new Set(failures.map(f => f.name));
-  
-  let list: Donor[] = Object.values(donors);
 
+  let list: Donor[] = Object.values(donors);
   if (filter === 'close') list = list.filter(d => crm[d.name]?.circle === 'close');
   else if (filter === 'approach') list = list.filter(d => crm[d.name]?.circle === 'approach');
   else if (filter === 'third') list = list.filter(d => crm[d.name]?.circle === 'third');
@@ -68,154 +56,152 @@ export function DonorsTab() {
   else if (filter === 'hk') list = list.filter(d => hkNames.has(d.name));
   else if (filter === 'errors') list = list.filter(d => errNames.has(d.name));
 
-  if (search) {
-    list = list.filter(d => d.name.toLowerCase().includes(search.toLowerCase()));
-  }
+  if (search) list = list.filter(d => d.name.toLowerCase().includes(search.toLowerCase()));
 
   const getNearestDateDays = (d: Donor) => {
-     let minDays = 365;
-     const today = new Date();
-     const gBday = (d as any)['תאריך לידה'] || (d as any)['יום הולדת'];
-     if (gBday) {
-        let day = 0, m = 0;
-        const gStr = String(gBday);
-        const isoMatch = gStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-        if (isoMatch) { m = parseInt(isoMatch[2]); day = parseInt(isoMatch[3]); }
-        else {
-           const match = gStr.match(/(\d{1,2})[\/\.-](\d{1,2})/);
-           if (match) { day = parseInt(match[1]); m = parseInt(match[2]); }
-        }
-        if (day > 0 && m > 0 && day <= 31 && m <= 12) {
-           const dateThisYear = new Date(today.getFullYear(), m - 1, day);
-           if (dateThisYear < today) dateThisYear.setFullYear(today.getFullYear() + 1);
-           const dist = Math.ceil((dateThisYear.getTime() - today.getTime()) / 86400000);
-           if (dist < minDays) minDays = dist;
-        }
-     }
-     
-     // Very rough check if hebrew date exists and has a month, to give it *some* sorting bump
-     // Ideally we'd use hebcal here like in HomeTab
-     const hBday = String((d as any)['תאריך לידה עברי'] || '');
-     const yahrzeit = String((d as any)['יארצייט'] || (d as any)['יורצייט'] || (d as any)['יום השנה'] || '');
-     if (minDays === 365 && (hBday || yahrzeit)) {
-        return 364; // push those with some hebrew dates up relative to those with none
-     }
-     
-     return minDays;
+    let minDays = 365;
+    const today = new Date();
+    const gBday = (d as any)['תאריך לידה'] || (d as any)['יום הולדת'];
+    if (gBday) {
+      let day = 0, m = 0;
+      const gStr = String(gBday);
+      const isoMatch = gStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (isoMatch) { m = parseInt(isoMatch[2]); day = parseInt(isoMatch[3]); }
+      else {
+        const match = gStr.match(/(\d{1,2})[\/\.-](\d{1,2})/);
+        if (match) { day = parseInt(match[1]); m = parseInt(match[2]); }
+      }
+      if (day > 0 && m > 0 && day <= 31 && m <= 12) {
+        const dateThisYear = new Date(today.getFullYear(), m - 1, day);
+        if (dateThisYear < today) dateThisYear.setFullYear(today.getFullYear() + 1);
+        const dist = Math.ceil((dateThisYear.getTime() - today.getTime()) / 86400000);
+        if (dist < minDays) minDays = dist;
+      }
+    }
+    const hBday = String((d as any)['תאריך לידה עברי'] || '');
+    const yahrzeit = String((d as any)['יארצייט'] || (d as any)['יורצייט'] || (d as any)['יום השנה'] || '');
+    if (minDays === 365 && (hBday || yahrzeit)) return 364;
+    return minDays;
   };
 
   list.sort((a, b) => {
     if (sort === 'total') return (b.total || 0) - (a.total || 0);
     if (sort === 'name') return a.name.localeCompare(b.name, 'he');
     if (sort === 'circle') {
-       const w = { close: 4, approach: 3, third: 2, target: 1 };
-       const wA = w[(crm[a.name] || {}).circle as keyof typeof w] || 0;
-       const wB = w[(crm[b.name] || {}).circle as keyof typeof w] || 0;
-       return wB - wA || (b.total || 0) - (a.total || 0);
+      const w = { close: 4, approach: 3, third: 2, target: 1 };
+      const wA = w[(crm[a.name] || {}).circle as keyof typeof w] || 0;
+      const wB = w[(crm[b.name] || {}).circle as keyof typeof w] || 0;
+      return wB - wA || (b.total || 0) - (a.total || 0);
     }
-    if (sort === 'date') {
-       return getNearestDateDays(a) - getNearestDateDays(b);
-    }
+    if (sort === 'date') return getNearestDateDays(a) - getNearestDateDays(b);
     return 0;
   });
 
+  const circleLabel: Record<string, string> = { close: '⭐ קרוב', approach: '🔄 מתקרב', third: '⭕ שלישי', far: '' };
+
+  const filterTabs = [
+    { id: 'all', label: 'הכל' },
+    { id: 'close', label: '⭐ קרוב' },
+    { id: 'approach', label: '🔄 מתקרב' },
+    { id: 'third', label: '⭕ מ. שלישי' },
+    { id: 'target', label: '🎯 להקרב' },
+    { id: 'hk', label: 'הוק' },
+    { id: 'errors', label: 'שגיאות' },
+  ];
+
   return (
-    <div className="animate-in fade-in pb-24">
+    <div className="animate-in fade-in pb-24 md:pb-6">
       {/* Topbar */}
-      <div className="bg-[#0D1B2A] px-4 py-3 pb-3 flex items-center justify-between sticky top-0 z-50 shadow-md">
-        <div className="w-9 h-9 bg-gradient-to-br from-[#C9A84C] to-[#9B7A2F] rounded-lg flex items-center justify-center font-['Frank_Ruhl_Libre'] text-xl text-white font-black shrink-0">
-          <Users size={20} />
+      <div className="bg-[#0D1B2A] px-4 py-3 flex items-center justify-between sticky top-0 z-50 shadow-md">
+        <div className="w-9 h-9 bg-gradient-to-br from-[#C9A84C] to-[#9B7A2F] rounded-lg flex items-center justify-center shrink-0 md:hidden">
+          <Users size={20} className="text-white" />
         </div>
-        <div className="flex-1 px-3">
+        <div className="flex-1 px-3 md:px-0">
           <div className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#C9A84C]">אנשי קשר</div>
-          <div className="text-[11px] text-white/45 mt-[1px]">{list.length} אנשי קשר</div>
+          <div className="text-[11px] text-white/45 mt-[1px]">{list.length} רשומות</div>
         </div>
         <div className="flex gap-2">
-          <button 
-            onClick={handleAddContactClick}
-            className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0"
+          <button
+            onClick={() => setIsAddContactOpen(true)}
+            className="flex items-center gap-1.5 px-3 h-9 bg-[#C9A84C] text-[#0D1B2A] rounded-full text-sm font-bold shadow-md transition-transform active:scale-95"
           >
-            <Plus size={18} />
+            <Plus size={15} />
+            <span className="hidden sm:inline">הוסף</span>
           </button>
-          <button 
+          <button
             onClick={refresh}
-            className={`w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0 transition-transform active:rotate-180 duration-500`}
+            className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0 transition-transform active:rotate-180 duration-500"
           >
             <RefreshCw size={16} />
           </button>
         </div>
       </div>
 
-      <div className="p-4">
-        {/* Search */}
-        <div className="bg-white rounded-xl py-2.5 px-3.5 flex items-center gap-2.5 shadow-sm mb-4 border-[1.5px] border-transparent focus-within:border-[#C9A84C] transition-colors">
-          <Search size={18} className="text-gray-400" />
-          <input
-            type="text"
-            className="flex-1 bg-transparent border-none outline-none text-sm text-[#0D1B2A]"
-            placeholder="חיפוש לפי שם..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-
-        {/* Sort & Filters */}
-        <div className="flex gap-2 mb-3">
-          <select 
-             className="bg-white border border-[#EDE6D6] text-sm rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#C9A84C] text-[#0D1B2A] font-medium shadow-sm w-full"
-             value={sort}
-             onChange={e => setSort(e.target.value)}
-          >
-            <option value="total">📝 מיון: לפי תרומה פוטנציאלית / סה"כ</option>
-            <option value="name">📝 מיון: לפי שם (א׳-ת׳)</option>
-            <option value="circle">📝 מיון: לפי מעגל קרבה</option>
-            <option value="date">📝 מיון: לפי תאריכים קרובים</option>
-          </select>
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-1 mb-4 no-scrollbar">
-          {[
-            { id: 'all', label: 'הכל' },
-            { id: 'close', label: '⭐ קרוב' },
-            { id: 'approach', label: '🔄 מתקרב' },
-            { id: 'third', label: '⭕ מ. שלישי' },
-            { id: 'target', label: '🎯 להקרב' },
-            { id: 'hk', label: 'הוק' },
-            { id: 'errors', label: 'שגיאות' },
-          ].map(f => (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id)}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium border-[1.5px] transition-colors ${
-                filter === f.id
-                  ? 'bg-[#0D1B2A] border-[#0D1B2A] text-[#C9A84C]'
-                  : 'bg-white border-[#EDE6D6] text-gray-500'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {/* List */}
-        {list.length === 0 ? (
-          <div className="text-center py-10 text-gray-400">
-            <Search size={32} className="mx-auto mb-3 opacity-20" />
-            <p className="text-sm">לא נמצאו אנשי קשר מתאימים</p>
+      {/* Search + filters — full width on all screens */}
+      <div className="p-4 pb-2 md:px-6 md:py-4">
+        <div className="md:flex md:items-center md:gap-4">
+          <div className="bg-white rounded-xl py-2.5 px-3.5 flex items-center gap-2.5 shadow-sm border-[1.5px] border-transparent focus-within:border-[#C9A84C] transition-colors mb-3 md:mb-0 md:w-72 md:shrink-0">
+            <Search size={18} className="text-gray-400 shrink-0" />
+            <input
+              type="text"
+              className="flex-1 bg-transparent border-none outline-none text-sm text-[#0D1B2A]"
+              placeholder="חיפוש לפי שם..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
           </div>
-        ) : (
-          <div className="space-y-2">
+
+          <div className="md:hidden mb-3">
+            <select
+              className="bg-white border border-[#EDE6D6] text-sm rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#C9A84C] text-[#0D1B2A] font-medium shadow-sm w-full"
+              value={sort}
+              onChange={e => setSort(e.target.value)}
+            >
+              <option value="total">מיון: לפי תרומה</option>
+              <option value="name">מיון: לפי שם</option>
+              <option value="circle">מיון: לפי מעגל</option>
+              <option value="date">מיון: לפי תאריכים</option>
+            </select>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {filterTabs.map(f => (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium border-[1.5px] transition-colors ${
+                  filter === f.id
+                    ? 'bg-[#0D1B2A] border-[#0D1B2A] text-[#C9A84C]'
+                    : 'bg-white border-[#EDE6D6] text-gray-500 hover:border-[#C9A84C]'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {list.length === 0 ? (
+        <div className="text-center py-10 text-gray-400">
+          <Search size={32} className="mx-auto mb-3 opacity-20" />
+          <p className="text-sm">לא נמצאו אנשי קשר מתאימים</p>
+        </div>
+      ) : (
+        <>
+          {/* Mobile card list */}
+          <div className="px-4 space-y-2 md:hidden">
             {list.map(d => {
               const crmData = crm[d.name] || {};
               const isHk = hkNames.has(d.name);
               const isErr = errNames.has(d.name);
               return (
-                <div 
-                  key={d.name} 
+                <div
+                  key={d.name}
                   className="bg-white rounded-xl p-3 flex items-center gap-3 shadow-sm active:scale-95 transition-transform cursor-pointer"
                   onClick={() => setSelectedDonor(d.name)}
                 >
-                  <div 
+                  <div
                     className="w-[42px] h-[42px] rounded-full flex justify-center items-center text-white font-['Frank_Ruhl_Libre'] font-bold text-lg shrink-0"
                     style={{ background: getAvatarColor(d.name) }}
                   >
@@ -230,48 +216,139 @@ export function DonorsTab() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    {crmData.circle === 'close' && <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] bg-green-100 text-green-800">⭐</div>}
-                    {crmData.circle === 'approach' && <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] bg-amber-100 text-amber-800">🔄</div>}
-                    {crmData.circle === 'third' && <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] bg-purple-100 text-purple-800">⭕</div>}
-                    {crmData.target && <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] bg-blue-100 text-blue-800 mr-1">🎯</div>}
+                    {crmData.circle === 'close' && <span className="text-sm">⭐</span>}
+                    {crmData.circle === 'approach' && <span className="text-sm">🔄</span>}
+                    {crmData.circle === 'third' && <span className="text-sm">⭕</span>}
+                    {crmData.target && <span className="text-sm">🎯</span>}
                   </div>
                   <div className="text-left shrink-0 mr-2">
                     <div className="font-['Frank_Ruhl_Libre'] text-base font-bold text-[#9B7A2F]">₪{(d.total || 0).toLocaleString()}</div>
                     <div className="text-[10px] text-gray-500">סהכ</div>
                   </div>
                 </div>
-              )
+              );
             })}
           </div>
-        )}
-      </div>
-      
-      {selectedDonor && <ProfileModal name={selectedDonor} onClose={() => setSelectedDonor(null)} />}
-      
-      {isAddContactOpen && (
-        <div className="fixed inset-0 bg-[#0D1B2A]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-[#FAF6EE] rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col pt-5">
-              <h2 className="px-5 font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] mb-3">הוספת איש קשר חדש</h2>
-              <div className="px-5 pb-5">
-                 <input 
-                   type="text" 
-                   autoFocus
-                   value={newContactName}
-                   onChange={e => setNewContactName(e.target.value)}
-                   onKeyDown={e => { if (e.key === 'Enter') submitNewContact(); }}
-                   placeholder="שם ההתלמיד / איש הקשר"
-                   className="w-full bg-white border border-[#EDE6D6] rounded-xl p-3 text-sm outline-none focus:border-[#C9A84C] mb-4 shadow-sm"
-                 />
-                 <div className="flex gap-2">
-                   <button onClick={() => setIsAddContactOpen(false)} className="flex-1 py-2.5 text-gray-600 font-bold rounded-xl bg-gray-200 hover:bg-gray-300 transition-colors">ביטול</button>
-                   <button 
-                     onClick={submitNewContact} 
-                     className="flex-1 py-2.5 bg-gradient-to-br from-[#C9A84C] to-[#9B7A2F] text-white font-bold rounded-xl shadow-md active:scale-95 transition-transform"
-                   >
-                     הוספה
-                   </button>
-                 </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block px-6 pb-6">
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-[#EDE6D6]">
+              {/* Table header */}
+              <div className="grid grid-cols-[2.5rem_1fr_8rem_7rem_7rem_5rem] gap-0 bg-[#0D1B2A]/5 border-b border-[#EDE6D6] text-[11px] font-bold text-gray-500 uppercase tracking-wide">
+                <div className="px-4 py-3" />
+                <button
+                  className="px-4 py-3 text-right hover:text-[#C9A84C] transition-colors"
+                  onClick={() => setSort('name')}
+                >
+                  שם {sort === 'name' && '↑'}
+                </button>
+                <button
+                  className="px-4 py-3 text-right hover:text-[#C9A84C] transition-colors"
+                  onClick={() => setSort('circle')}
+                >
+                  מעגל {sort === 'circle' && '↑'}
+                </button>
+                <button
+                  className="px-4 py-3 text-right hover:text-[#C9A84C] transition-colors"
+                  onClick={() => setSort('total')}
+                >
+                  סה"כ תרומות {sort === 'total' && '↓'}
+                </button>
+                <button
+                  className="px-4 py-3 text-right hover:text-[#C9A84C] transition-colors"
+                  onClick={() => setSort('date')}
+                >
+                  תאריך אחרון {sort === 'date' && '↑'}
+                </button>
+                <div className="px-4 py-3 text-center">סטטוס</div>
               </div>
+
+              {/* Rows */}
+              {list.map((d, i) => {
+                const crmData = crm[d.name] || {};
+                const isHk = hkNames.has(d.name);
+                const isErr = errNames.has(d.name);
+                return (
+                  <div
+                    key={d.name}
+                    onClick={() => setSelectedDonor(d.name)}
+                    className={`grid grid-cols-[2.5rem_1fr_8rem_7rem_7rem_5rem] gap-0 items-center cursor-pointer transition-colors hover:bg-[#FAF6EE] ${
+                      i > 0 ? 'border-t border-[#EDE6D6]' : ''
+                    }`}
+                  >
+                    <div className="px-3 py-3">
+                      <div
+                        className="w-8 h-8 rounded-full flex justify-center items-center text-white font-['Frank_Ruhl_Libre'] font-bold text-sm"
+                        style={{ background: getAvatarColor(d.name) }}
+                      >
+                        {d.name.charAt(0)}
+                      </div>
+                    </div>
+                    <div className="px-4 py-3">
+                      <div className="text-sm font-semibold text-[#0D1B2A]">{d.name}</div>
+                      {(d as any)['טלפון'] && (
+                        <div className="text-[11px] text-gray-400 mt-0.5">{(d as any)['טלפון']}</div>
+                      )}
+                    </div>
+                    <div className="px-4 py-3">
+                      {crmData.circle && crmData.circle !== 'far' ? (
+                        <span className="text-xs font-medium">{circleLabel[crmData.circle]}</span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                      {crmData.target && <span className="mr-1 text-xs">🎯</span>}
+                    </div>
+                    <div className="px-4 py-3">
+                      <span className="font-['Frank_Ruhl_Libre'] text-sm font-bold text-[#9B7A2F]">
+                        ₪{(d.total || 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="px-4 py-3 text-xs text-gray-500">
+                      {d.lastDate || '—'}
+                    </div>
+                    <div className="px-4 py-3 flex items-center justify-center gap-1">
+                      {isHk && <span title="הוראת קבע" className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[10px] flex items-center justify-center font-bold">הק</span>}
+                      {isErr && <span title="שגיאה" className="w-5 h-5 rounded-full bg-red-100 text-red-600 text-[10px] flex items-center justify-center">⚠</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="text-xs text-gray-400 mt-2 text-right">
+              מציג {list.length} אנשי קשר
+            </div>
+          </div>
+        </>
+      )}
+
+      {selectedDonor && <ProfileModal name={selectedDonor} onClose={() => setSelectedDonor(null)} />}
+
+      {isAddContactOpen && (
+        <div className="fixed inset-0 bg-[#0D1B2A]/40 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4" dir="rtl">
+          <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col pt-5 md:pb-0">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4 md:hidden" />
+            <h2 className="px-5 font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] mb-3">הוספת איש קשר חדש</h2>
+            <div className="px-5 pb-5">
+              <input
+                type="text"
+                autoFocus
+                value={newContactName}
+                onChange={e => setNewContactName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') submitNewContact(); }}
+                placeholder="שם איש הקשר"
+                className="w-full bg-white border border-[#EDE6D6] rounded-xl p-3 text-sm outline-none focus:border-[#C9A84C] mb-4 shadow-sm"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => setIsAddContactOpen(false)} className="flex-1 py-2.5 text-gray-600 font-bold rounded-xl bg-gray-200 hover:bg-gray-300 transition-colors">ביטול</button>
+                <button
+                  onClick={submitNewContact}
+                  className="flex-1 py-2.5 bg-gradient-to-br from-[#C9A84C] to-[#9B7A2F] text-white font-bold rounded-xl shadow-md active:scale-95 transition-transform"
+                >
+                  הוספה
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
