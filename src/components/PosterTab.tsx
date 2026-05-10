@@ -26,6 +26,23 @@ export function PosterTab({ onClose }: { onClose: () => void }) {
   const [dateShabbat, setDateShabbat] = useState('');
   const [parasha, setParasha] = useState('');
 
+  const [bgImage, setBgImage] = useState<string | null>(null);
+  const [bgOverlay, setBgOverlay] = useState(40);
+  const bgInputRef = useRef<HTMLInputElement>(null);
+
+  const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setBgImage(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const removeBg = () => {
+    setBgImage(null);
+    if (bgInputRef.current) bgInputRef.current.value = '';
+  };
+
   const monthsRu = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 
   useEffect(() => {
@@ -164,6 +181,40 @@ export function PosterTab({ onClose }: { onClose: () => void }) {
                  שבת מברכים (מציג תהילים)
               </label>
            </div>
+
+           {/* Background image upload */}
+           <div className="border-t border-[#EDE6D6] pt-4 mt-2">
+             <p className="text-sm font-bold text-[#0D1B2A] mb-2">תמונת רקע מותאמת אישית</p>
+             <div className="flex items-center gap-3 flex-wrap">
+               <button
+                 onClick={() => bgInputRef.current?.click()}
+                 className="bg-[#0D1B2A] text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-[#1a2d44] transition-colors"
+               >
+                 📁 העלה תמונה
+               </button>
+               {bgImage && (
+                 <button onClick={removeBg} className="text-red-500 text-sm font-semibold hover:text-red-700">
+                   ✕ הסר תמונה
+                 </button>
+               )}
+               <input ref={bgInputRef} type="file" accept="image/*" onChange={handleBgUpload} className="hidden" />
+               {bgImage
+                 ? <span className="text-green-600 text-sm font-semibold">✓ תמונה נטענה</span>
+                 : <span className="text-gray-400 text-xs">ללא תמונה — יוצג עיצוב ברירת המחדל</span>
+               }
+             </div>
+             {bgImage && (
+               <div className="mt-3 flex items-center gap-3">
+                 <label className="text-xs text-gray-500 font-bold whitespace-nowrap">שכבת לובן ({bgOverlay}%)</label>
+                 <input
+                   type="range" min={0} max={80} value={bgOverlay}
+                   onChange={e => setBgOverlay(+e.target.value)}
+                   className="flex-1"
+                 />
+                 <span className="text-xs text-gray-400 whitespace-nowrap">0 = שקוף · 80 = בהיר</span>
+               </div>
+             )}
+           </div>
            <div className="grid grid-cols-2 gap-3" dir="ltr">
               <div className="flex flex-col gap-1">
                  <label className="text-xs text-gray-500 font-bold uppercase">Зажжение свечей (Candles)</label>
@@ -211,23 +262,37 @@ export function PosterTab({ onClose }: { onClose: () => void }) {
           <div className="origin-top-left flex-shrink-0" style={{ transform: 'scale(0.35)', width: '1080px', height: '1527px', marginBottom: '-992px', marginRight: '-702px' }}>
             
             {/* The Poster DOM */}
-            <div ref={posterRef} dir="ltr" className="w-[1080px] h-[1527px] bg-white relative overflow-hidden flex flex-col origin-top-left" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
-               
-               {/* Background Header Red */}
-               <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-br from-[#802032] via-[#6B1A28] to-[#450d18]"></div>
-               <svg className="absolute top-0 left-0 w-full h-[500px] opacity-10" viewBox="0 0 1080 500">
-                 <pattern id="pattern-circles" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-                   <circle cx="20" cy="20" r="1.5" fill="#ffffff" />
-                 </pattern>
-                 <rect x="0" y="0" width="100%" height="100%" fill="url(#pattern-circles)" />
-               </svg>
-               
-               <svg className="absolute top-[370px] left-0 w-full z-10" viewBox="0 0 1080 150" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M0,40 Q270,125 540,60 T1080,40 L1080,150 L0,150 Z" fill="#FBF9F6"/>
-                  <path d="M0,20 Q270,105 540,40 T1080,20 L1080,150 L0,150 Z" fill="#ffffff" opacity="0.3"/>
-               </svg>
+            <div
+              ref={posterRef}
+              dir="ltr"
+              className="w-[1080px] h-[1527px] bg-white relative overflow-hidden flex flex-col origin-top-left"
+              style={{
+                fontFamily: '"Times New Roman", Times, serif',
+                ...(bgImage ? { backgroundImage: `url(${bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {})
+              }}
+            >
+               {/* Default graphic elements — hidden when custom bg is active */}
+               {!bgImage && (
+                 <>
+                   <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-br from-[#802032] via-[#6B1A28] to-[#450d18]"></div>
+                   <svg className="absolute top-0 left-0 w-full h-[500px] opacity-10" viewBox="0 0 1080 500">
+                     <pattern id="pattern-circles" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+                       <circle cx="20" cy="20" r="1.5" fill="#ffffff" />
+                     </pattern>
+                     <rect x="0" y="0" width="100%" height="100%" fill="url(#pattern-circles)" />
+                   </svg>
+                   <svg className="absolute top-[370px] left-0 w-full z-10" viewBox="0 0 1080 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+                     <path d="M0,40 Q270,125 540,60 T1080,40 L1080,150 L0,150 Z" fill="#FBF9F6"/>
+                     <path d="M0,20 Q270,105 540,40 T1080,20 L1080,150 L0,150 Z" fill="#ffffff" opacity="0.3"/>
+                   </svg>
+                 </>
+               )}
 
-               <div className="absolute top-0 left-0 w-full h-full bg-[#FBF9F6] -z-10"></div>
+               {/* Body background (default) or white overlay on custom bg for readability */}
+               <div
+                 className="absolute top-0 left-0 w-full h-full -z-10"
+                 style={{ backgroundColor: bgImage ? `rgba(255,255,255,${bgOverlay / 100})` : '#FBF9F6' }}
+               ></div>
                
                {/* Content */}
                <div className="relative z-20 w-full h-full flex flex-col pt-10">
@@ -357,12 +422,18 @@ export function PosterTab({ onClose }: { onClose: () => void }) {
                   </div>
 
                   {/* Footer ribbon */}
-                  <div className="absolute bottom-0 left-0 w-full bg-[#6B1A28] px-24 py-8 flex justify-end items-center">
-                     <svg className="absolute top-[-30px] rotate-180 left-0 w-full z-10" viewBox="0 0 1080 30" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-                        <path d="M0,0 Q270,30 540,15 T1080,0 L1080,30 L0,30 Z" fill="#6B1A28"/>
-                     </svg>
-                     <h1 className="text-[#ffffff] text-[56px] font-bold relative z-20" style={{ fontFamily: 'Georgia, serif', fontStyle:'italic', textShadow: "2px 2px 4px rgba(0,0,0,0.3)" }}>Шаббат шалом!</h1>
-                  </div>
+                  {!bgImage ? (
+                    <div className="absolute bottom-0 left-0 w-full bg-[#6B1A28] px-24 py-8 flex justify-end items-center">
+                       <svg className="absolute top-[-30px] rotate-180 left-0 w-full z-10" viewBox="0 0 1080 30" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+                          <path d="M0,0 Q270,30 540,15 T1080,0 L1080,30 L0,30 Z" fill="#6B1A28"/>
+                       </svg>
+                       <h1 className="text-[#ffffff] text-[56px] font-bold relative z-20" style={{ fontFamily: 'Georgia, serif', fontStyle:'italic', textShadow: "2px 2px 4px rgba(0,0,0,0.3)" }}>Шаббат шалом!</h1>
+                    </div>
+                  ) : (
+                    <div className="absolute bottom-0 left-0 w-full px-24 py-10 flex justify-end items-center">
+                       <h1 className="text-[#6B1A28] text-[56px] font-bold" style={{ fontFamily: 'Georgia, serif', fontStyle:'italic', textShadow: "1px 1px 0px rgba(255,255,255,0.8), 2px 2px 6px rgba(0,0,0,0.15)" }}>Шаббат шалом!</h1>
+                    </div>
+                  )}
 
                </div>
                
