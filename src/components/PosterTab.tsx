@@ -74,8 +74,7 @@ export function PosterTab({ onClose }: { onClose: () => void }) {
       }
 
       if (candleItem) {
-        // Hebcal returns 18 min before sunset; Afula uses 30 min — subtract 12 min
-        const d = new Date(new Date(candleItem.date).getTime() - 12 * 60000);
+        const d = new Date(candleItem.date);
         setCandleTime(`${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`);
         // calculate default mincha 15m after
         const m = new Date(d.getTime() + 15*60000);
@@ -97,7 +96,7 @@ export function PosterTab({ onClose }: { onClose: () => void }) {
         setHavdalah(`${d.getHours()}:${d.getMinutes().toString().padStart(2, '0')}`);
         // Mincha shabbat same as candle lighting approximately
         if (candleItem) {
-          const cd = new Date(new Date(candleItem.date).getTime() - 12 * 60000);
+          const cd = new Date(candleItem.date);
           setMinchaShabbat(`${cd.getHours()}:${cd.getMinutes().toString().padStart(2, '0')}`);
           // Halacha 30m before
           const hd = new Date(cd.getTime() - 30*60000);
