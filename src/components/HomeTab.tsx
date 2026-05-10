@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { Plus, Users, Calendar, PieChart, Info, AlertTriangle, CheckCircle, ChevronLeft, Pencil, X, CalendarDays, MessageSquare } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
+import { HolidayModal } from './HolidayModal';
 import { DateConverterModal } from './DateConverterModal';
 import { ThankYouModal } from './ThankYouModal';
 import { HDate } from '@hebcal/core';
@@ -11,6 +12,7 @@ import { getCustomHols } from '../lib/api';
 export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => void, onDonationClick: () => void }) {
   const { summary, donations, failures, rebbeDate, crm, donors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras } = useAppStore();
   const [selectedDonor, setSelectedDonor] = useState<string | null>(null);
+  const [selectedHoliday, setSelectedHoliday] = useState<any | null>(null);
   const [isRebbeEditOpen, setIsRebbeEditOpen] = useState(false);
   const [isDateConverterOpen, setIsDateConverterOpen] = useState(false);
   const [isAllEventsOpen, setIsAllEventsOpen] = useState(false);
@@ -254,7 +256,10 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
             const tasks = extra.tasks || [];
             const openTasks = tasks.filter((t: any) => !t.done);
             return (
-              <div key={i} className="bg-white rounded-xl p-3 border border-[#EDE6D6] shadow-sm">
+              <div key={i}
+                className="bg-white rounded-xl p-3 border border-[#EDE6D6] shadow-sm cursor-pointer active:scale-[0.98] transition-transform hover:border-[#C9A84C]/40"
+                onClick={() => setSelectedHoliday({ ...h, id: h.name })}
+              >
                 <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-50">
                   <div className="flex items-center gap-2">
                     <span className="text-xl">{h.emoji}</span>
@@ -263,11 +268,14 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
                       <div className="text-xs text-gray-500">{new Date(h.dateStr).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })} · בעוד {days} ימים</div>
                     </div>
                   </div>
-                  {tasks.length > 0 && (
-                    <div className={`text-[10px] font-bold px-2 py-1 rounded-md ${openTasks.length === 0 ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
-                      {openTasks.length} משימות פתוחות
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {tasks.length > 0 && (
+                      <div className={`text-[10px] font-bold px-2 py-1 rounded-md ${openTasks.length === 0 ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
+                        {openTasks.length} משימות פתוחות
+                      </div>
+                    )}
+                    <Pencil size={13} className="text-gray-300" />
+                  </div>
                 </div>
                 {openTasks.length > 0 ? (
                   <div className="space-y-1.5 mt-2">
@@ -282,7 +290,7 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
                 ) : tasks.length > 0 ? (
                   <div className="text-xs text-green-600 flex items-center gap-1 mt-1"><CheckCircle size={12} /> כל המשימות הושלמו!</div>
                 ) : (
-                  <div className="text-xs text-gray-400 mt-1 italic">אין משימות מתוכננות לחג זה</div>
+                  <div className="text-xs text-gray-400 mt-1 italic">לחץ להוספת משימות ותכנון</div>
                 )}
               </div>
             );
@@ -355,19 +363,21 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
 
   const renderStatsRow = () => (
     <div className="grid grid-cols-2 gap-3">
-      <div className="bg-white rounded-xl p-3.5 shadow-sm">
+      <div className="bg-white rounded-xl p-3.5 shadow-sm cursor-pointer active:scale-95 transition-transform hover:border hover:border-[#C9A84C]/30"
+        onClick={() => setTab('donors')}>
         <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">תורמים</div>
         <div className="font-['Frank_Ruhl_Libre'] text-3xl font-bold text-[#0D1B2A] leading-none mb-1">{summary?.donorCount || 0}</div>
-        <div className="text-[11px] text-green-500 font-medium">פעילים</div>
+        <div className="text-[11px] text-[#9B7A2F] font-medium flex items-center gap-1">פעילים <ChevronLeft size={11} /></div>
       </div>
-      <div className="bg-white rounded-xl p-3.5 shadow-sm">
+      <div className="bg-white rounded-xl p-3.5 shadow-sm cursor-pointer active:scale-95 transition-transform hover:border hover:border-[#C9A84C]/30"
+        onClick={() => setTab('donors')}>
         <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">הוראות קבע</div>
         <div className="font-['Frank_Ruhl_Libre'] text-3xl font-bold text-[#0D1B2A] leading-none mb-1">{summary?.hkActive || 0}</div>
-        <div className="text-[11px] text-green-500 font-medium">
+        <div className="text-[11px] font-medium">
           {(summary?.failureCount || 0) > 0 ? (
             <span className="text-amber-500 flex items-center gap-1"><AlertTriangle size={10} /> {summary?.failureCount || 0} שגיאות</span>
           ) : (
-            <span className="flex items-center gap-1"><CheckCircle size={10} /> תקין</span>
+            <span className="text-green-500 flex items-center gap-1"><CheckCircle size={10} /> תקין</span>
           )}
         </div>
       </div>
@@ -436,20 +446,22 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
       ) : (
         <div className="space-y-2">
           {recent.map((d, i) => (
-            <div key={i} className="bg-white rounded-xl p-3 flex items-center gap-3 shadow-sm border border-[#EDE6D6]">
+            <div key={i}
+              className="bg-white rounded-xl p-3 flex items-center gap-3 shadow-sm border border-[#EDE6D6] cursor-pointer active:scale-[0.98] transition-transform hover:border-[#C9A84C]/40"
+              onClick={() => setSelectedDonor(d.name)}
+            >
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#C9A84C] to-[#9B7A2F] flex items-center justify-center text-white font-bold text-lg shrink-0">
                 {d.name?.charAt(0) || '?'}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-bold text-[#0D1B2A] truncate">{d.name}</div>
-                <div className="text-[10px] text-gray-500 truncate">{d.date} · {d.method}</div>
+                <div className="text-[10px] text-gray-500 truncate">{d.date} · {d.method} {d.purpose ? `· ${d.purpose}` : ''}</div>
               </div>
-              <div className="text-left shrink-0 flex flex-col items-end">
+              <div className="text-left shrink-0 flex flex-col items-end gap-1">
                 <div className="font-['Frank_Ruhl_Libre'] text-base font-bold text-[#9B7A2F]">₪{(d.amount || 0).toLocaleString()}</div>
-                <div className="text-[10px] text-gray-500 mb-1">{d.purpose || 'תרומה'}</div>
                 <button onClick={(e) => { e.stopPropagation(); setThankYouInfo({ name: d.name, amount: d.amount || 0, phone: crm[d.name]?.phone || '' }); }}
-                  className="bg-green-50 text-green-600 p-1 rounded hover:bg-green-100 transition-colors" title="שלח הודעת תודה">
-                  <MessageSquare size={14} />
+                  className="bg-green-50 text-green-600 p-1.5 rounded-lg hover:bg-green-100 transition-colors flex items-center gap-1 text-[10px] font-bold" title="שלח הודעת תודה">
+                  <MessageSquare size={12} /> תודה
                 </button>
               </div>
             </div>
@@ -619,6 +631,7 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
       )}
 
       {selectedDonor && <ProfileModal name={selectedDonor} onClose={() => setSelectedDonor(null)} />}
+      {selectedHoliday && <HolidayModal holiday={selectedHoliday} onClose={() => setSelectedHoliday(null)} />}
       {isDateConverterOpen && <DateConverterModal onClose={() => setIsDateConverterOpen(false)} />}
       {thankYouInfo && <ThankYouModal donorName={thankYouInfo.name} amount={thankYouInfo.amount} phone={thankYouInfo.phone} onClose={() => setThankYouInfo(null)} />}
     </div>

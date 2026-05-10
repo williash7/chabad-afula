@@ -92,12 +92,14 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
     setDocError(null);
     const dateLabel = hDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
     const result = await createHolidayDoc(holiday.name, dateLabel);
-    if (result) {
+    if (result && result.url) {
       const nextDocs = [...(extra.docs || []), { url: result.url, title: result.title, createdAt: new Date().toISOString() }];
       updateHolidayExtras(id, { docs: nextDocs });
       window.open(result.url, '_blank');
     } else {
-      setDocError('לא ניתן ליצור מסמך. וודא שה-GAS מעודכן ויש חיבור לשרת.');
+      setDocError(result?.error
+        ? `שגיאת GAS: ${result.error}`
+        : 'לא ניתן ליצור מסמך — ה-GAS לא מכיר את הפעולה. הוסף את הקוד המלא מהמדריך.');
     }
     setIsCreatingDoc(false);
   };
