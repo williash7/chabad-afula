@@ -22,25 +22,27 @@ function AppContent() {
   }
 
   return (
-    <div className="relative min-h-screen font-sans bg-[#FAF6EE]" dir="rtl">
-      {/* Desktop sidebar */}
-      <SideNav currentTab={activeTab} setTab={setActiveTab} onDonationClick={() => setIsDonationOpen(true)} />
+    <div className="min-h-screen font-sans bg-[#FAF6EE]" dir="rtl">
+      {apiError && (
+        <div className="bg-red-500 text-white p-3 text-sm font-bold text-center w-full z-50 shadow-md">
+          ⚠️ שגיאת חיבור לסנכרון נתונים
+          <div className="text-xs font-normal mt-1 bg-red-600 p-2 rounded-md opacity-90">{apiError}</div>
+          <div className="text-xs font-normal mt-1 opacity-90">האפליקציה פועלת במצב מידע הדגמה חלקי מקומי.</div>
+        </div>
+      )}
 
-      {/* Main content — on desktop pushed left of the sidebar */}
-      <div className="min-h-screen pb-20 md:pb-6 md:mr-60">
-        {apiError && (
-          <div className="bg-red-500 text-white p-3 text-sm font-bold text-center w-full z-50 shadow-md">
-            ⚠️ שגיאת חיבור לסנכרון נתונים
-            <div className="text-xs font-normal mt-1 bg-red-600 p-2 rounded-md opacity-90">{apiError}</div>
-            <div className="text-xs font-normal mt-1 opacity-90">האפליקציה פועלת במצב מידע הדגמה חלקי מקומי.</div>
-          </div>
-        )}
-        {activeTab === 'home' && <HomeTab setTab={setActiveTab} onDonationClick={() => setIsDonationOpen(true)} />}
-        {activeTab === 'donors' && <DonorsTab />}
-        {activeTab === 'events' && <EventsTab />}
-        {activeTab === 'calendar' && <CalendarTab />}
-        {activeTab === 'reports' && <ReportsTab />}
-        {activeTab === 'poster' && <PosterTab onClose={() => setActiveTab('home')} />}
+      {/* md+: flex row — in RTL the sidebar (first child) appears on the RIGHT */}
+      <div className="md:flex min-h-screen">
+        <SideNav currentTab={activeTab} setTab={setActiveTab} onDonationClick={() => setIsDonationOpen(true)} />
+
+        <main className="flex-1 min-w-0 pb-20 md:pb-6">
+          {activeTab === 'home' && <HomeTab setTab={setActiveTab} onDonationClick={() => setIsDonationOpen(true)} />}
+          {activeTab === 'donors' && <DonorsTab />}
+          {activeTab === 'events' && <EventsTab />}
+          {activeTab === 'calendar' && <CalendarTab />}
+          {activeTab === 'reports' && <ReportsTab />}
+          {activeTab === 'poster' && <PosterTab onClose={() => setActiveTab('home')} />}
+        </main>
       </div>
 
       {/* Mobile bottom nav */}

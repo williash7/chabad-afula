@@ -21,7 +21,8 @@ export function SideNav({ currentTab, setTab, onDonationClick }: SideNavProps) {
   ];
 
   return (
-    <aside className="hidden md:flex flex-col w-60 bg-[#0D1B2A] fixed right-0 top-0 h-screen z-50 border-l border-white/10">
+    <aside className="hidden md:block w-60 shrink-0 bg-[#0D1B2A] border-l border-white/10">
+      <div className="sticky top-0 h-screen flex flex-col overflow-y-auto">
       {/* Branding */}
       <div className="p-5 border-b border-white/10">
         <div className="flex items-center gap-3">
@@ -87,6 +88,7 @@ export function SideNav({ currentTab, setTab, onDonationClick }: SideNavProps) {
           <RefreshCw size={12} />
           רענן נתונים
         </button>
+      </div>
       </div>
     </aside>
   );
