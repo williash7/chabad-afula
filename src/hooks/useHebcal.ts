@@ -7,7 +7,7 @@ export function useHebcal() {
 
   useEffect(() => {
     // Fetch Shabbat times
-    fetch('https://www.hebcal.com/shabbat?cfg=json&city=Afula')
+    fetch('https://www.hebcal.com/shabbat?cfg=json&city=Afula&m=30')
       .then(r => r.json())
       .then(data => setShabbat(data))
       .catch(console.error);

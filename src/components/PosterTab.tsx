@@ -58,7 +58,7 @@ export function PosterTab({ onClose }: { onClose: () => void }) {
       
       if (parashaItem) {
         // Fetch translated parasha
-        fetch('https://www.hebcal.com/shabbat?cfg=json&city=Afula&lg=ru')
+        fetch('https://www.hebcal.com/shabbat?cfg=json&city=Afula&lg=ru&m=30')
           .then(r => r.json())
           .then(data => {
              const translatedParasha = data.items?.find((i: any) => i.category === 'parashat');
