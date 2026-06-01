@@ -88,6 +88,15 @@ export function saveCRMData(data: any) {
   localStorage.setItem('crm_data', JSON.stringify(data));
 }
 
+export function getManualDonations(): any[] {
+  try { return JSON.parse(localStorage.getItem('manual_donations') || '[]'); }
+  catch { return []; }
+}
+
+export function saveManualDonations(data: any[]) {
+  localStorage.setItem('manual_donations', JSON.stringify(data));
+}
+
 export function getEventsData(): any[] {
   try { return JSON.parse(localStorage.getItem('events_data') || '[]'); }
   catch { return []; }

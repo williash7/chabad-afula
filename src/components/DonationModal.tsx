@@ -9,7 +9,7 @@ interface DonationModalProps {
 }
 
 export function DonationModal({ onClose, defaultName = '' }: DonationModalProps) {
-  const { donors, refresh, crm } = useAppStore();
+  const { donors, refresh, crm, addManualDonation } = useAppStore();
   const [name, setName] = useState(defaultName);
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -45,8 +45,16 @@ export function DonationModal({ onClose, defaultName = '' }: DonationModalProps)
 
     setLoading(false);
     if (!res.error) {
+      addManualDonation({
+        name: name.trim(),
+        date: dateStr,
+        amount: parseFloat(amount),
+        purpose: purpose.trim(),
+        method: cleanMethod,
+        notes: notes.trim(),
+      });
       refresh();
-      
+
       if (sendWa && amount) {
          setShowThankYou(true);
       } else {

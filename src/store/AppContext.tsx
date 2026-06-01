@@ -4,6 +4,7 @@ import {
   getCRMDataCloud, saveCRMDataCloud,
   getEventsDataCloud, saveEventsDataCloud,
   getHolidayExtrasCloud, saveHolidayExtrasCloud,
+  getManualDonations, saveManualDonations,
 } from '../lib/api';
 import { Donor, Donation, ReportSummary } from '../types';
 
@@ -24,6 +25,7 @@ interface AppState {
   holidayExtras: Record<string, any>;
   eventsData: any[];
   refresh: () => void;
+  addManualDonation: (donation: any) => void;
   updateCrm: (name: string, data: any) => void;
   updateHolidayExtras: (id: string, data: any) => void;
   updateEventsData: (data: any[]) => void;
@@ -165,9 +167,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!map[name]) map[name] = { name, total: 0, donations: [], lastDate: '' };
       });
 
-      if (donRes.donations) {
-        setDonations(donRes.donations);
-        donRes.donations.forEach((d: Donation) => {
+      const serverDonations: any[] = donRes.donations || [];
+      const manualDonations = getManualDonations();
+      // Merge: manual donations not already present in server list (deduplicate by name+date+amount)
+      const serverKeys = new Set(serverDonations.map((d: any) => `${d.name}|${d.date}|${d.amount}`));
+      const uniqueManual = manualDonations.filter((d: any) => !serverKeys.has(`${d.name}|${d.date}|${d.amount}`));
+      const allDonations = [...serverDonations, ...uniqueManual];
+
+      if (allDonations.length > 0) {
+        setDonations(allDonations);
+        allDonations.forEach((d: Donation) => {
           if (!d.name) return;
           if (!map[d.name]) map[d.name] = { name: d.name, total: 0, donations: [], lastDate: '' };
           map[d.name].donations.push(d);
@@ -192,6 +201,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     setLoading(false);
+  };
+
+  const addManualDonation = (donation: any) => {
+    setDonations(prev => {
+      const updated = [donation, ...prev];
+      const manual = getManualDonations();
+      saveManualDonations([donation, ...manual]);
+      return updated;
+    });
+    setDonors(prev => {
+      const name = donation.name;
+      if (!name) return prev;
+      const existing = prev[name] || { name, total: 0, donations: [], lastDate: '' };
+      return {
+        ...prev,
+        [name]: {
+          ...existing,
+          donations: [donation, ...(existing.donations || [])],
+          total: (existing.total || 0) + (donation.amount || 0),
+          lastDate: donation.date || existing.lastDate,
+        },
+      };
+    });
   };
 
   const updateCrm = (name: string, data: any) => {
@@ -234,7 +266,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       summary, donations, donors, hk, failures, rebbeDate,
       shabbat, holidays, hebrewDate,
       loading, loadingText, apiError, crm, holidayExtras, eventsData, refresh: loadAll,
-      updateCrm, updateHolidayExtras, updateEventsData, updateRebbeDate,
+      addManualDonation, updateCrm, updateHolidayExtras, updateEventsData, updateRebbeDate,
     }}>
       {children}
     </AppContext.Provider>
