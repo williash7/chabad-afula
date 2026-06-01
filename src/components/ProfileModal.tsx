@@ -144,13 +144,20 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
     setEditingPhone(false);
   };
 
+  const resolvedPhone = (() => {
+    const raw = crmData.phone || (donor as any)['טלפון'] || '';
+    let n = String(raw).replace(/\D/g, '');
+    if (n.startsWith('0')) n = '972' + n.substring(1);
+    return n;
+  })();
+
   const openWhatsApp = () => {
-    if (!crmData.phone) {
+    if (!resolvedPhone) {
       setPhoneInput('');
       setEditingPhone(true);
       return;
     }
-    window.open(`https://wa.me/${crmData.phone}`, '_blank');
+    window.open(`https://wa.me/${resolvedPhone}`, '_blank');
   };
 
   return (
@@ -257,7 +264,7 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
                 <MessageSquare size={18} />
                 WhatsApp
               </button>
-              <button onClick={() => crmData.phone ? window.open(`tel:${crmData.phone}`) : setEditingPhone(true)} className="bg-blue-50 text-blue-700 border border-blue-200 rounded-xl p-3 flex flex-col items-center justify-center gap-1 font-semibold text-sm">
+              <button onClick={() => resolvedPhone ? window.open(`tel:${resolvedPhone}`) : setEditingPhone(true)} className="bg-blue-50 text-blue-700 border border-blue-200 rounded-xl p-3 flex flex-col items-center justify-center gap-1 font-semibold text-sm">
                 <Phone size={18} />
                 התקשר
               </button>
