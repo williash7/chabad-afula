@@ -5,7 +5,7 @@ import { Donor } from '../types';
 import { ProfileModal } from './ProfileModal';
 
 export function DonorsTab() {
-  const { donors, hk, failures, crm, refresh } = useAppStore();
+  const { donors, hk, failures, crm, refresh, updateCrm } = useAppStore();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('total');
@@ -24,10 +24,9 @@ export function DonorsTab() {
     }
     setIsAddContactOpen(false);
     setNewContactName('');
-    const { apiPost, saveCRMData, getCRMData } = await import('../lib/api');
+    const { apiPost } = await import('../lib/api');
     await apiPost('updateDonorField', { name, field: 'מקור', value: 'אפליקציה' });
-    const currentCrm = getCRMData();
-    saveCRMData({ ...currentCrm, [name]: { circle: 'far' } });
+    updateCrm(name, { circle: 'far' });
     refresh();
     setSelectedDonor(name);
   };

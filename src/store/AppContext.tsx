@@ -98,11 +98,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadHebcal();
 
     // Load cloud-synced data in parallel with the main API calls
+    let resolvedCrm: Record<string, any> = getCRMData();
     const cloudLoads = Promise.all([
       getCRMDataCloud(),
       getEventsDataCloud(),
       getHolidayExtrasCloud(),
     ]).then(([cloudCrm, cloudEvents, cloudExtras]) => {
+      resolvedCrm = cloudCrm;
       setCrm(cloudCrm);
       setEventsData(cloudEvents);
       setHolidayExtras(cloudExtras);
@@ -159,7 +161,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Wait for cloud CRM so we can merge correctly
       await cloudLoads;
 
-      Object.keys(crm).forEach((name) => {
+      Object.keys(resolvedCrm).forEach((name) => {
         if (!map[name]) map[name] = { name, total: 0, donations: [], lastDate: '' };
       });
 
