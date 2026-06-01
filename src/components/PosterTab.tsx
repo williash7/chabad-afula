@@ -26,20 +26,36 @@ export function PosterTab({ onClose }: { onClose: () => void }) {
   const [dateShabbat, setDateShabbat] = useState('');
   const [parasha, setParasha] = useState('');
 
-  const [bgImage, setBgImage] = useState<string | null>(null);
-  const [bgOverlay, setBgOverlay] = useState(40);
+  const [bgImage, setBgImage] = useState<string | null>(() => localStorage.getItem('poster_bgImage'));
+  const [bgOverlay, setBgOverlay] = useState(() => {
+    const saved = localStorage.getItem('poster_bgOverlay');
+    return saved !== null ? +saved : 40;
+  });
   const bgInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem('poster_bgOverlay', String(bgOverlay));
+  }, [bgOverlay]);
 
   const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => setBgImage(ev.target?.result as string);
+    reader.onload = ev => {
+      const dataUrl = ev.target?.result as string;
+      setBgImage(dataUrl);
+      try {
+        localStorage.setItem('poster_bgImage', dataUrl);
+      } catch {
+        alert('התמונה גדולה מדי לשמירה — נסה תמונה קטנה יותר');
+      }
+    };
     reader.readAsDataURL(file);
   };
 
   const removeBg = () => {
     setBgImage(null);
+    localStorage.removeItem('poster_bgImage');
     if (bgInputRef.current) bgInputRef.current.value = '';
   };
 

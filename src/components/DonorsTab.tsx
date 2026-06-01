@@ -439,7 +439,7 @@ export function DonorsTab() {
 
       {isAddContactOpen && (
         <div className="fixed inset-0 bg-[#0D1B2A]/40 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4" dir="rtl">
-          <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col pt-5 md:pb-0">
+          <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl w-full max-w-sm shadow-2xl flex flex-col pt-5 pb-24 md:pb-0">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4 md:hidden" />
             <h2 className="px-5 font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] mb-3">הוספת איש קשר חדש</h2>
             <div className="px-5 pb-5">
