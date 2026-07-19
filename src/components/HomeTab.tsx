@@ -10,7 +10,7 @@ import { format } from 'date-fns';
 import { getCustomHols } from '../lib/api';
 
 export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => void, onDonationClick: () => void }) {
-  const { summary, donations, failures, rebbeDate, crm, donors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras } = useAppStore();
+  const { summary, donations, failures, rebbeDate, crm, donors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras, refresh } = useAppStore();
   const [selectedDonor, setSelectedDonor] = useState<string | null>(null);
   const [selectedHoliday, setSelectedHoliday] = useState<any | null>(null);
   const [isRebbeEditOpen, setIsRebbeEditOpen] = useState(false);
@@ -18,6 +18,16 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
   const [isAllEventsOpen, setIsAllEventsOpen] = useState(false);
   const [selectedMethodForDetails, setSelectedMethodForDetails] = useState<string | null>(null);
   const [thankYouInfo, setThankYouInfo] = useState<{name: string, amount: number, phone: string} | null>(null);
+  // מפתח: "שם|טלפון" או "שם|אישית" → timestamp של תיעוד מהיר אחרון, כדי להראות "✓ נרשם" מיידית
+  const [quickLogged, setQuickLogged] = useState<Record<string, number>>({});
+
+  const handleQuickLog = async (donorName: string, meetType: 'טלפון' | 'אישית') => {
+    setQuickLogged(prev => ({ ...prev, [`${donorName}|${meetType}`]: Date.now() }));
+    const { apiPost } = await import('../lib/api');
+    const dateStr = new Date().toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    await apiPost('addMeeting', { name: donorName, date: dateStr, meetType, purpose: '', notes: '' });
+    refresh();
+  };
 
   const handleRebbeSave = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -27,17 +37,13 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
     setIsRebbeEditOpen(false);
   };
 
-  const { personalAlerts, allPersonalEvents, crmAlerts } = React.useMemo(() => {
-    const allPersonalEvents: any[] = [];
-    const cAlerts: any[] = [];
+  // "ליצור קשר עכשיו" — מבוסס על התשתית הקיימת: מעגלי קרבה + דגל "להקרב" (CRM),
+  // יומן מפגשים (donations/meetings המשותף), ותזכורות ימי הולדת/יארצייט.
+  // לא בונה מודל מידע כפול — רק ממיין ומדרג את מה שכבר קיים לפי דחיפות.
+  const { contactFocus, contactFocusAll } = React.useMemo(() => {
     const today = new Date();
     today.setHours(0,0,0,0);
-    const isEndOfWeek = today.getDay() === 4 || today.getDay() === 5;
-    let nextHolDays = 999;
-    if (holidays.length > 0) {
-      const holDate = new Date(holidays[0].date.split('T')[0]);
-      nextHolDays = Math.ceil((holDate.getTime() - today.getTime()) / 86400000);
-    }
+
     const cleanHeStr = (str: string) =>
       String(str).replace(/[֑-ׇ‎‏]/g, '').replace(/[^א-ת0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
     const nextYearHebrew = new Map<string, number>();
@@ -56,43 +62,61 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
       if (pNum.length > 1 && pNum[1].startsWith('ב') && pNum[1].length > 1) keyNum = pNum[0] + ' ' + pNum[1].substring(1);
       if (!nextYearHebrew.has(keyNum)) nextYearHebrew.set(keyNum, i);
     }
+    const checkHebrewDateMatch = (bdayStr: string) => {
+      const clean = cleanHeStr(bdayStr);
+      for (const k of nextYearHebrew.keys()) {
+        if (clean === k || clean.startsWith(k + ' ') || k === clean + ' ' || clean.includes(' ' + k + ' ') || clean.endsWith(' ' + k)) return k;
+      }
+      return null;
+    };
+
+    // תאריך המפגש (לא תרומה!) האחרון שתועד לכל תורם — מהיומן המשותף
+    // donations/meetings שכבר קיים (ראה ReportsTab: amount===0 = רשומת מפגש).
+    const lastMeetingByName = new Map<string, Date>();
+    (donations as any[]).forEach(d => {
+      if ((d.amount || 0) !== 0 || !d.name) return;
+      const dateStr = d.date || d.meetDate;
+      if (!dateStr) return;
+      const parsed = new Date(String(dateStr).split('/').reverse().join('-'));
+      if (isNaN(parsed.getTime())) return;
+      const prev = lastMeetingByName.get(d.name);
+      if (!prev || parsed > prev) lastMeetingByName.set(d.name, parsed);
+    });
+
+    const circleLabel: Record<string, string> = { close: '⭐ קרוב', approach: '🔄 מתקרב', third: '⭕ מעגל שלישי' };
+    const circleThreshold: Record<string, number> = { close: 14, approach: 30, third: 60 };
+
+    const dateEvents: any[] = [];
+    const overdueEvents: any[] = [];
+
     Object.keys(donors).forEach(name => {
       const donor = donors[name];
       const hBday = (donor as any)['תאריך לידה עברי'] || crm[name]?.customFields?.['תאריך לידה עברי'];
       const gBday = (donor as any)['תאריך לידה'] || (donor as any)['יום הולדת'];
-      // יארצייט — כולל שדות מרובים כמו "יארצייט אב" / "יארצייט אם", לפי כל
-      // שם עמודה שקיים בפועל בגיליון או שנערך ידנית בכרטיס התורם.
       const combinedForDates = { ...(donor as any), ...(crm[name]?.customFields || {}) };
       const yahrzeitEntries = Object.keys(combinedForDates)
         .filter(k => /יארצייט|יורצייט|פטירה|יום השנה/.test(k) && combinedForDates[k])
         .map(k => ({ key: k, value: String(combinedForDates[k]) }));
-      let hasPersonalAlert = false;
-      const checkHebrewDateMatch = (bdayStr: string) => {
-        const clean = cleanHeStr(bdayStr);
-        for (const k of nextYearHebrew.keys()) {
-          if (clean === k || clean.startsWith(k + ' ') || k === clean + ' ' || clean.includes(' ' + k + ' ') || clean.endsWith(' ' + k)) return k;
-        }
-        return null;
-      };
+
+      let hasDateEvent = false;
       if (hBday) {
         const matchKey = checkHebrewDateMatch(hBday);
         if (matchKey && nextYearHebrew.has(matchKey)) {
           const idx = nextYearHebrew.get(matchKey)!;
-          allPersonalEvents.push({ type: 'info', name, msg: 'יום הולדת עברי ' + (idx === 0 ? 'היום' : `בעוד ${idx} ימים`), action: '🎁 ברך', icon: '🎂', priority: 1, dist: idx });
-          hasPersonalAlert = true;
+          dateEvents.push({ name, msg: 'יום הולדת עברי ' + (idx === 0 ? 'היום' : `בעוד ${idx} ימים`), icon: '🎂', dist: idx });
+          hasDateEvent = true;
         }
       }
       yahrzeitEntries.forEach(({ key, value }) => {
         const matchKey = checkHebrewDateMatch(value);
         if (matchKey && nextYearHebrew.has(matchKey)) {
           const idx = nextYearHebrew.get(matchKey)!;
-          // אם לשדה יש שם ספציפי (למשל "יארצייט אב") נציג אותו; אחרת "יארצייט" כללי
           const label = /^(יארצייט|יורצייט|יום השנה)$/.test(key) ? 'יארצייט' : key;
-          allPersonalEvents.push({ type: 'info', name, msg: label + ' ' + (idx === 0 ? 'היום' : `בעוד ${idx} ימים`), action: '🕯️ הודעה', icon: '🕯️', priority: 1, dist: idx });
-          hasPersonalAlert = true;
+          dateEvents.push({ name, msg: label + ' ' + (idx === 0 ? 'היום' : `בעוד ${idx} ימים`), icon: '🕯️', dist: idx });
+          hasDateEvent = true;
         }
       });
-      if (!hasPersonalAlert && gBday) {
+      if (!hasDateEvent && gBday) {
         const gStr = String(gBday);
         let d = 0, m = 0;
         const isoMatch = gStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
@@ -102,20 +126,48 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
           const dateThisYear = new Date(today.getFullYear(), m - 1, d);
           if (dateThisYear < today) dateThisYear.setFullYear(today.getFullYear() + 1);
           const realDays = Math.ceil((dateThisYear.getTime() - today.getTime()) / 86400000);
-          if (realDays >= 0) allPersonalEvents.push({ type: 'info', name, msg: 'יום הולדת ' + (realDays === 0 ? 'היום' : `בעוד ${realDays} ימים`), action: '🎁 ברך', icon: '🎈', priority: 1, dist: realDays });
+          if (realDays >= 0) dateEvents.push({ name, msg: 'יום הולדת ' + (realDays === 0 ? 'היום' : `בעוד ${realDays} ימים`), icon: '🎈', dist: realDays });
         }
       }
-      const data = crm[name];
-      if (data?.target && !hasPersonalAlert) {
-        if (nextHolDays <= 14) cAlerts.push({ type: 'info', name, msg: 'חג מתקרב — הזמן אישית!', action: '💬 שלח', icon: '🍷', priority: 2 });
-        else if (isEndOfWeek && Math.random() > 0.5) cAlerts.push({ type: 'target', name, msg: 'התקשר לאחל שבת שלום', action: '📞 התקשר', icon: '🕯️', priority: 3 });
-        else cAlerts.push({ type: 'target', name, msg: 'מסומן להקרב — הצע חברותא או פגישה', action: '📝 תכנן', icon: '🎯', priority: 4 });
+
+      // הליבה של הבקשה: מעגל קרבה + זמן שחלף מהמפגש האחרון
+      const circle = crm[name]?.circle;
+      const isTarget = !!crm[name]?.target;
+      if ((circle && circle !== 'far') || isTarget) {
+        const threshold = circle && circleThreshold[circle] ? circleThreshold[circle] : 30;
+        const lastMeet = lastMeetingByName.get(name);
+        const daysSince = lastMeet ? Math.floor((today.getTime() - lastMeet.getTime()) / 86400000) : null;
+        if (daysSince === null || daysSince > threshold) {
+          const circleTxt = circle && circleLabel[circle] ? circleLabel[circle] : (isTarget ? '🎯 מסומן להקרב' : '');
+          const msg = daysSince === null
+            ? `לא תועד קשר עדיין${circleTxt ? ' · ' + circleTxt : ''}`
+            : `${daysSince} ימים בלי יצירת קשר${circleTxt ? ' · ' + circleTxt : ''}`;
+          overdueEvents.push({
+            name, msg,
+            icon: circle === 'close' ? '⭐' : circle === 'approach' ? '🔄' : circle === 'third' ? '⭕' : '🎯',
+            overdueBy: daysSince === null ? Infinity : daysSince - threshold,
+            circleWeight: circle === 'close' ? 0 : circle === 'approach' ? 1 : circle === 'third' ? 2 : 3,
+          });
+        }
       }
     });
-    cAlerts.sort((a, b) => (a.priority || 5) - (b.priority || 5));
-    allPersonalEvents.sort((a, b) => (a.dist || 0) - (b.dist || 0));
-    return { personalAlerts: allPersonalEvents.filter(a => a.dist <= 30).slice(0, 10), allPersonalEvents, crmAlerts: cAlerts };
-  }, [donors, crm, holidays]);
+
+    dateEvents.sort((a, b) => a.dist - b.dist);
+    overdueEvents.sort((a, b) => a.circleWeight - b.circleWeight || b.overdueBy - a.overdueBy);
+
+    const contactFocusAll = [
+      ...overdueEvents.map(e => ({ ...e, kind: 'overdue' as const })),
+      ...dateEvents.filter(e => e.dist <= 30).map(e => ({ ...e, kind: 'date' as const })),
+    ];
+
+    const urgency = (e: any) => e.kind === 'date' ? e.dist : Math.max(0, 60 - (e.overdueBy === Infinity ? 999 : e.overdueBy));
+    const contactFocus = [
+      ...dateEvents.filter(e => e.dist <= 7).map(e => ({ ...e, kind: 'date' as const })),
+      ...overdueEvents.map(e => ({ ...e, kind: 'overdue' as const })),
+    ].sort((a, b) => urgency(a) - urgency(b));
+
+    return { contactFocus, contactFocusAll };
+  }, [donors, crm, donations]);
 
   const recent = [...donations].sort((a, b) => {
     const aDate = a.date.split('/').reverse().join('-');
@@ -133,77 +185,67 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
 
   // ── Render helpers ──────────────────────────────────────────────────────────
 
-  const renderPersonalDates = () => (
-    <div className="mb-0">
+  // כרטיס-שורה עם שני כפתורי תיעוד מהיר (טלפון / מפגש) — משותף לכרטיס הראשי ולמודל "הצג הכל"
+  const renderQuickLogButtons = (donorName: string, compact = false) => {
+    const callKey = `${donorName}|טלפון`;
+    const meetKey = `${donorName}|אישית`;
+    const calledRecently = !!quickLogged[callKey] && Date.now() - quickLogged[callKey] < 60000;
+    const metRecently = !!quickLogged[meetKey] && Date.now() - quickLogged[meetKey] < 60000;
+    const size = compact ? 'text-[11px] py-1.5' : 'text-xs py-1.5';
+    return (
+      <div className="flex gap-2">
+        <button
+          onClick={() => handleQuickLog(donorName, 'טלפון')}
+          disabled={calledRecently}
+          className={`flex-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform disabled:opacity-60 ${size}`}
+        >
+          {calledRecently ? '✓ נרשם' : '📞 שוחחתי'}
+        </button>
+        <button
+          onClick={() => handleQuickLog(donorName, 'אישית')}
+          disabled={metRecently}
+          className={`flex-1 bg-green-50 text-green-700 border border-green-200 rounded-lg font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform disabled:opacity-60 ${size}`}
+        >
+          {metRecently ? '✓ נרשם' : '🤝 נפגשנו'}
+        </button>
+      </div>
+    );
+  };
+
+  const renderContactFocus = () => (
+    <div>
       <div className="flex justify-between items-center mb-3">
         <h2 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A] flex items-center gap-2">
-          <span className="text-xl">🎂</span> 10 יארצייט וימי הולדת הקרובים
+          <span className="text-xl">🤝</span> ליצור קשר עכשיו
         </h2>
-        {allPersonalEvents.length > 0 && (
+        {contactFocusAll.length > 0 && (
           <button onClick={() => setIsAllEventsOpen(true)} className="text-xs text-[#9B7A2F] font-bold">
-            הצג הכל ({allPersonalEvents.length}) &gt;
+            הצג הכל ({contactFocusAll.length}) &gt;
           </button>
         )}
       </div>
-      {personalAlerts.length === 0 ? (
+      {contactFocus.length === 0 ? (
         <div className="bg-white rounded-xl p-6 text-center text-gray-500 shadow-sm text-sm border border-[#EDE6D6]">
-          🎉 אין פה כרגע אירועים אישיים ב-30 הימים הקרובים
+          ✅ אין כרגע אנשי קשר שממתינים ליצירת קשר. עבודה מצוינת!
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-[#EDE6D6] overflow-hidden">
-          <table className="w-full text-right text-sm">
-            <thead className="bg-gray-50 border-b border-[#EDE6D6] text-gray-500 text-[11px] uppercase tracking-wide">
-              <tr>
-                <th className="py-2 px-3 font-semibold">סוג</th>
-                <th className="py-2 px-3 font-semibold">שם</th>
-                <th className="py-2 px-3 font-semibold">מתי</th>
-                <th className="py-2 px-3 font-semibold text-center">פעולה</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#EDE6D6]">
-              {personalAlerts.map((a: any, i: number) => (
-                <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="py-2 px-3">
-                    <span className="flex items-center gap-1.5 text-[#0D1B2A]">
-                      <span className="text-base">{a.icon}</span>
-                      <span className="max-w-[70px] truncate">{a.msg.split(' ')[0]} {a.msg.split(' ')[1]}</span>
-                    </span>
-                  </td>
-                  <td className="py-2 px-3 font-bold text-[#0D1B2A] whitespace-nowrap">{a.name}</td>
-                  <td className="py-2 px-3 text-gray-600 whitespace-nowrap">{a.dist === 0 ? 'היום' : `בעוד ${a.dist} ימים`}</td>
-                  <td className="py-2 px-3 text-center">
-                    <button onClick={() => setSelectedDonor(a.name)} className="bg-[#C9A84C]/10 text-[#9B7A2F] text-[10px] font-bold px-2.5 py-1 rounded-md active:scale-95 transition-transform whitespace-nowrap">
-                      {a.action}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-2">
+          {contactFocus.slice(0, 8).map((c: any, i: number) => (
+            <div key={i} className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
+              <div className="flex items-center gap-3 mb-2.5 cursor-pointer" onClick={() => setSelectedDonor(c.name)}>
+                <span className="text-xl shrink-0">{c.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-[#0D1B2A] truncate">{c.name}</div>
+                  <div className="text-xs text-gray-600 mt-0.5">{c.msg}</div>
+                </div>
+              </div>
+              {renderQuickLogButtons(c.name)}
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
-
-  const renderCRMAlerts = () => {
-    if (crmAlerts.length === 0) return (
-      <div className="bg-white rounded-xl p-4 text-center text-gray-500 shadow-sm text-sm border border-[#EDE6D6]">✅ אין כרגע משימות קשר.</div>
-    );
-    return (
-      <div className="space-y-2">
-        {crmAlerts.slice(0, 5).map((a, i) => (
-          <div key={i} className="bg-white border border-[#EDE6D6] rounded-xl p-3 flex items-center gap-3 shadow-sm">
-            <span className="text-xl shrink-0">{a.icon}</span>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-[#0D1B2A]">{a.name}</div>
-              <div className="text-xs text-gray-600 mt-0.5">{a.msg}</div>
-            </div>
-            <button onClick={() => setSelectedDonor(a.name)} className="bg-[#0D1B2A] text-[#E8C97A] text-[11px] font-bold px-3 py-1.5 rounded-lg shrink-0">{a.action}</button>
-          </div>
-        ))}
-      </div>
-    );
-  };
 
   const renderShabbatCard = () => {
     if (!shabbat?.items) return null;
@@ -551,41 +593,33 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
 
       {/* ── Mobile layout ── */}
       <div className="p-4 space-y-4 md:hidden">
-        {renderRebbeCard()}
+        {renderContactFocus()}
         {renderShabbatCard()}
-        {renderHeroSummary()}
-        {renderStatsRow()}
+        {renderRebbeCard()}
         {renderHolidaysAndTasks()}
         {renderQuickActions()}
-        {renderPersonalDates()}
-        <div>
-          <h2 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A] mb-3 flex items-center gap-2"><span className="text-xl">📋</span> לטיפול עכשיו</h2>
-          {renderCRMAlerts()}
-        </div>
+        {renderHeroSummary()}
+        {renderStatsRow()}
         {renderFailures()}
         {renderRecent()}
       </div>
 
       {/* ── Desktop layout — two columns ── */}
       <div className="hidden md:grid md:grid-cols-[1fr_380px] md:gap-6 md:p-6 md:items-start">
-        {/* Left: primary data */}
+        {/* Left: primary — יצירת קשר קודם, תרומות אחר כך */}
         <div className="space-y-5">
+          {renderContactFocus()}
           {renderHeroSummary()}
           {renderStatsRow()}
-          {renderPersonalDates()}
           {renderFailures()}
           {renderRecent()}
         </div>
         {/* Right: context & actions */}
         <div className="space-y-5">
-          {renderRebbeCard()}
           {renderShabbatCard()}
+          {renderRebbeCard()}
           {renderHolidaysAndTasks()}
           {renderQuickActions()}
-          <div>
-            <h2 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A] mb-3 flex items-center gap-2"><span className="text-xl">📋</span> לטיפול עכשיו</h2>
-            {renderCRMAlerts()}
-          </div>
         </div>
       </div>
 
@@ -615,23 +649,23 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
         <div className="fixed inset-0 bg-black/50 z-[200] flex items-end md:items-center justify-center p-0 md:p-4" onClick={(e) => e.target === e.currentTarget && setIsAllEventsOpen(false)}>
           <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl p-5 pb-10 md:pb-5 w-full max-w-[430px] md:max-w-2xl max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
             <div className="flex justify-between items-center mb-5 sticky top-0 bg-[#FAF6EE] py-2 z-10">
-              <h2 className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] flex items-center gap-2"><span className="text-2xl">🎂</span> כל אירועי ימי ההולדת והיארצייט</h2>
+              <h2 className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] flex items-center gap-2"><span className="text-2xl">🤝</span> כל אנשי הקשר לטיפול</h2>
               <button onClick={() => setIsAllEventsOpen(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={16} /></button>
             </div>
             <div className="md:grid md:grid-cols-2 md:gap-3 space-y-3 md:space-y-0">
-              {allPersonalEvents.map((a: any, i: number) => (
-                <div key={i} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer" onClick={() => setSelectedDonor(a.name)}>
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{a.icon}</span>
-                    <div>
-                      <div className="font-bold text-[#0D1B2A] text-sm">{a.name}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{a.msg}</div>
+              {contactFocusAll.map((c: any, i: number) => (
+                <div key={i} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+                  <div className="flex items-center gap-3 mb-2.5 cursor-pointer" onClick={() => setSelectedDonor(c.name)}>
+                    <span className="text-2xl">{c.icon}</span>
+                    <div className="min-w-0">
+                      <div className="font-bold text-[#0D1B2A] text-sm">{c.name}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{c.msg}</div>
                     </div>
                   </div>
-                  <div className="text-[#C9A84C] text-[10px] font-bold bg-[#C9A84C]/10 px-2.5 py-1 rounded-md shrink-0">{a.action}</div>
+                  {renderQuickLogButtons(c.name, true)}
                 </div>
               ))}
-              {allPersonalEvents.length === 0 && <div className="text-center py-6 text-gray-500 text-sm md:col-span-2">אין עדיין ימי הולדת או יארצייט במערכת.</div>}
+              {contactFocusAll.length === 0 && <div className="text-center py-6 text-gray-500 text-sm md:col-span-2">אין כרגע אנשי קשר שממתינים ליצירת קשר.</div>}
             </div>
           </div>
         </div>
