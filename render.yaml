@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: chabad-afula
-    runtime: node
-    buildCommand: npm install && npm run build
-    startCommand: NODE_ENV=production npm start
-    envVars:
-      - key: GS_URL
-        sync: false

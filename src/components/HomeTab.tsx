@@ -59,8 +59,13 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
     Object.keys(donors).forEach(name => {
       const donor = donors[name];
       const hBday = (donor as any)['תאריך לידה עברי'] || crm[name]?.customFields?.['תאריך לידה עברי'];
-      const yahrzeit = (donor as any)['יארצייט'] || (donor as any)['יורצייט'] || (donor as any)['יום השנה'] || crm[name]?.customFields?.['יארצייט'];
       const gBday = (donor as any)['תאריך לידה'] || (donor as any)['יום הולדת'];
+      // יארצייט — כולל שדות מרובים כמו "יארצייט אב" / "יארצייט אם", לפי כל
+      // שם עמודה שקיים בפועל בגיליון או שנערך ידנית בכרטיס התורם.
+      const combinedForDates = { ...(donor as any), ...(crm[name]?.customFields || {}) };
+      const yahrzeitEntries = Object.keys(combinedForDates)
+        .filter(k => /יארצייט|יורצייט|פטירה|יום השנה/.test(k) && combinedForDates[k])
+        .map(k => ({ key: k, value: String(combinedForDates[k]) }));
       let hasPersonalAlert = false;
       const checkHebrewDateMatch = (bdayStr: string) => {
         const clean = cleanHeStr(bdayStr);
@@ -77,14 +82,16 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
           hasPersonalAlert = true;
         }
       }
-      if (yahrzeit) {
-        const matchKey = checkHebrewDateMatch(yahrzeit);
+      yahrzeitEntries.forEach(({ key, value }) => {
+        const matchKey = checkHebrewDateMatch(value);
         if (matchKey && nextYearHebrew.has(matchKey)) {
           const idx = nextYearHebrew.get(matchKey)!;
-          allPersonalEvents.push({ type: 'info', name, msg: 'יארצייט ' + (idx === 0 ? 'היום' : `בעוד ${idx} ימים`), action: '🕯️ הודעה', icon: '🕯️', priority: 1, dist: idx });
+          // אם לשדה יש שם ספציפי (למשל "יארצייט אב") נציג אותו; אחרת "יארצייט" כללי
+          const label = /^(יארצייט|יורצייט|יום השנה)$/.test(key) ? 'יארצייט' : key;
+          allPersonalEvents.push({ type: 'info', name, msg: label + ' ' + (idx === 0 ? 'היום' : `בעוד ${idx} ימים`), action: '🕯️ הודעה', icon: '🕯️', priority: 1, dist: idx });
           hasPersonalAlert = true;
         }
-      }
+      });
       if (!hasPersonalAlert && gBday) {
         const gStr = String(gBday);
         let d = 0, m = 0;
@@ -163,7 +170,7 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
                     </span>
                   </td>
                   <td className="py-2 px-3 font-bold text-[#0D1B2A] whitespace-nowrap">{a.name}</td>
-                  <td className="py-2 px-3 text-gray-600 whitespace-nowrap">{a.msg.replace(/^(יום הולדת עברי|יארצייט|יום הולדת|יום הולדת לועזי)\s*/, '')}</td>
+                  <td className="py-2 px-3 text-gray-600 whitespace-nowrap">{a.dist === 0 ? 'היום' : `בעוד ${a.dist} ימים`}</td>
                   <td className="py-2 px-3 text-center">
                     <button onClick={() => setSelectedDonor(a.name)} className="bg-[#C9A84C]/10 text-[#9B7A2F] text-[10px] font-bold px-2.5 py-1 rounded-md active:scale-95 transition-transform whitespace-nowrap">
                       {a.action}

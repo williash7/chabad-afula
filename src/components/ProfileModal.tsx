@@ -23,6 +23,12 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
   const donor = donors[name] || { name, total: 0, donations: [], lastDate: '' };
   const crmData = crm[name] || { circle: 'far', target: false, phone: '' };
 
+  // שדות "תאריך חשוב": יום הולדת (עברי/לועזי) ויארצייט/פטירה — כולל שדות
+  // מרובים כמו "יארצייט אב" ו"יארצייט אם", כל שם עמודה שקיים בגיליון.
+  const isYahrzeitKey = (k: string) => /יארצייט|יורצייט|פטירה|יום השנה/.test(k);
+  const isBirthdayKey = (k: string) => k.includes('לידה');
+  const isImportantDateKey = (k: string) => isYahrzeitKey(k) || isBirthdayKey(k);
+
   const convertDateToHebrew = (gregStr: string, fieldKey: string) => {
     try {
       let d = 0, m = 0, y = 0;
@@ -205,6 +211,29 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
           </div>
         </div>
 
+        {/* Important dates: birthdays + parents' yahrzeits */}
+        {(() => {
+          const combined = { ...donor, ...(crmData.customFields || {}) };
+          const dateKeys = Object.keys(combined).filter(k => isImportantDateKey(k) && (combined as any)[k]);
+          if (dateKeys.length === 0) return null;
+          return (
+            <div className="bg-white rounded-2xl p-4 shadow-sm mb-5">
+              <h3 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A] mb-3">📅 תאריכים חשובים</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {dateKeys.map(key => (
+                  <div key={key} className="flex items-center gap-2.5 bg-[#FAF6EE] rounded-xl p-3 border border-[#EDE6D6]">
+                    <span className="text-xl shrink-0">{isYahrzeitKey(key) ? '🕯️' : '🎂'}</span>
+                    <div className="min-w-0">
+                      <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wide truncate">{key}</div>
+                      <div className="text-sm font-bold text-[#0D1B2A] truncate">{(combined as any)[key]}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Circles */}
         <h3 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A] mb-3">מעגל קשר</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
@@ -316,7 +345,8 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
           <div className="grid grid-cols-1 gap-y-3">
             {(() => {
                const combined = { ...donor, ...(crmData.customFields || {}) };
-               const keys = Object.keys(combined).filter(k => !['name','total','donations','lastDate'].includes(k) && !/^\d+$/.test(k));
+               // תאריכי לידה/יארצייט כבר מוצגים למעלה בכרטיס "תאריכים חשובים" — לא כופלים אותם כאן
+               const keys = Object.keys(combined).filter(k => !['name','total','donations','lastDate'].includes(k) && !/^\d+$/.test(k) && !isImportantDateKey(k));
                const isAddressKey = (k: string) => ['כתובת', 'address', 'רחוב', 'עיר'].some(t => k.toLowerCase().includes(t));
                const openInMaps = (addr: string) => {
                  window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr + ' עפולה')}`, '_blank');

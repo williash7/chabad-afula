@@ -5,10 +5,6 @@ coverage/
 .DS_Store
 *.log
 
-# סביבה — לא לגיטהאב
-.env*
-!.env.example
-
 # Claude Code
 .claude/
 

@@ -3,6 +3,7 @@ import { useAppStore } from '../store/AppContext';
 import { Search, RefreshCw, Plus, Users, Map, Navigation, MapPin, X } from 'lucide-react';
 import { Donor } from '../types';
 import { ProfileModal } from './ProfileModal';
+import { DonorsMap } from './DonorsMap';
 
 export function DonorsTab() {
   const { donors, hk, failures, crm, refresh, updateCrm } = useAppStore();
@@ -376,6 +377,11 @@ export function DonorsTab() {
                   </div>
                 ) : (
                   <>
+                    {/* Embedded map */}
+                    <div className="mb-5">
+                      <DonorsMap donors={withAddress} />
+                    </div>
+
                     {/* Quick actions */}
                     <div className="grid grid-cols-2 gap-3 mb-5">
                       <button

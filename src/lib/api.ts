@@ -1,16 +1,14 @@
 export const HEBCAL_API = 'https://www.hebcal.com/shabbat?cfg=json&city=Afula&M=on';
 
-// On Render: relative /api/gs is served by Express.
-// On GitHub Pages (static): VITE_API_URL points to the Render backend.
-const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+// כתובת ה-Google Apps Script (ה-"Web App" שמחובר לגיליון גוגל שיטס).
+// האפליקציה פונה אליה ישירות מהדפדפן — אין יותר שרת ביניים.
+// אם בעתיד תפרסמו גרסה חדשה של הסקריפט ותקבלו כתובת URL חדשה, פשוט
+// מחליפים כאן את הכתובת (השורה היחידה שצריך לגעת בה).
+const GS_URL = 'https://script.google.com/macros/s/AKfycbzsL7xbIA_3pnHnzmfMwnb-IFuAfn05_HiwCsuxJeQ3GEbeNXqYxqDTbKSp1Y9_aNCh/exec';
 
 export async function apiGet(action: string) {
   try {
-    const r = await fetch(`${API_BASE}/api/gs?action=${action}`);
-    if (r.status === 404) {
-      // No backend available (static deployment) – silently use local fallback
-      return getMockData(action);
-    }
+    const r = await fetch(`${GS_URL}?action=${action}`);
     const data = await r.json();
     if (!r.ok) {
       console.error(`API Error for ${action}:`, data.details || data.error);
@@ -25,12 +23,17 @@ export async function apiGet(action: string) {
 
 export async function apiPost(action: string, data: any) {
   try {
-    const r = await fetch(`${API_BASE}/api/gs`, {
+    // חשוב: שולחים כ-text/plain ולא application/json.
+    // דפדפנים שולחים קודם בקשת "preflight" (OPTIONS) לכל בקשת POST עם
+    // Content-Type: application/json בין אתרים שונים (CORS), וה-Google Apps
+    // Script לא יודע לענות לבקשת OPTIONS כזו — מה שהיה חוסם את הבקשה.
+    // עם text/plain הדפדפן לא שולח preflight, וה-Script קורא את הגוף
+    // הגולמי (e.postData.contents) ומפרש אותו כ-JSON בדיוק כמו קודם.
+    const r = await fetch(GS_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ ...data, action }),
     });
-    if (r.status === 404) return { success: false };
     const res = await r.json();
     if (!r.ok) throw new Error(res.details || res.error);
     return res;
