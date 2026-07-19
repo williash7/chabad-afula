@@ -3,8 +3,9 @@ import { useAppStore } from '../store/AppContext';
 import { Plus, Check, X, ClipboardList } from 'lucide-react';
 import { format } from 'date-fns';
 import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL } from '../lib/tasks';
+import { AIPlanningAssistant } from './AIPlanningAssistant';
 
-export function EventsTab() {
+export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: number } } = {}) {
   const { eventsData, updateEventsData, visibleDonors, crm, hk, failures } = useAppStore();
   const [filter, setFilter] = useState('all');
   const [isAddingMode, setIsAddingMode] = useState(false);
@@ -17,7 +18,11 @@ export function EventsTab() {
   const [evFreq, setEvFreq] = useState('weekly');
   const [evDate, setEvDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [evTime, setEvTime] = useState('');
-  
+
+  React.useEffect(() => {
+    if (addTrigger?.tab === 'events' && addTrigger.count) setIsAddingMode(true);
+  }, [addTrigger]);
+
   const [attSearch, setAttSearch] = useState('');
   const [attCategory, setAttCategory] = useState('all');
   const [pendingAtt, setPendingAtt] = useState<Record<string, boolean>>({});
@@ -85,6 +90,13 @@ export function EventsTab() {
     const nextTasks = [...(currentTasksEvent.tasks || []), { text: taskText.trim(), done: false }];
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
     setTaskText('');
+  };
+
+  const deleteEventTask = (idx: number) => {
+    if (!currentTasksEvent) return;
+    const nextTasks = [...(currentTasksEvent.tasks || [])];
+    nextTasks.splice(idx, 1);
+    updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
   };
 
   const toggleEventInvitePerson = (idx: number, person: string) => {
@@ -352,7 +364,10 @@ export function EventsTab() {
                    <div key={i} className="bg-white rounded-xl p-3 shadow-sm">
                      <div className="flex items-center justify-between mb-2">
                        <span className={`text-sm font-bold ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
-                       <span className="text-[10px] text-gray-400 shrink-0">נותרו ~{inviteRemainingMinutes(t)} דק'</span>
+                       <div className="flex items-center gap-2 shrink-0">
+                         <span className="text-[10px] text-gray-400">נותרו ~{inviteRemainingMinutes(t)} דק'</span>
+                         <button onClick={() => deleteEventTask(i)} className="text-red-300 hover:text-red-500" title="מחק משימה"><X size={14} /></button>
+                       </div>
                      </div>
                      <div className="flex flex-wrap gap-1.5">
                        {(t.people || []).map((p: string) => {
@@ -370,19 +385,35 @@ export function EventsTab() {
                      </div>
                    </div>
                  ) : (
-                   <div key={i} onClick={() => toggleEventTask(i)} className="bg-white rounded-xl p-3 shadow-sm flex items-center gap-3 cursor-pointer">
-                     <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
+                   <div key={i} className="bg-white rounded-xl p-3 shadow-sm flex items-center gap-3">
+                     <div onClick={() => toggleEventTask(i)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 cursor-pointer ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
                        {t.done && <Check size={12} className="text-white" />}
                      </div>
-                     <span className={`text-sm ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+                     <span onClick={() => toggleEventTask(i)} className={`text-sm flex-1 cursor-pointer ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+                     <button onClick={() => deleteEventTask(i)} className="text-red-300 hover:text-red-500 shrink-0" title="מחק משימה"><X size={14} /></button>
                    </div>
                  )
                ))}
              </div>
 
-             <div className="flex gap-2 mb-4 shrink-0">
+             <div className="flex gap-2 mb-3 shrink-0">
                <input value={taskText} onChange={e => setTaskText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addEventTask()} type="text" className="flex-1 bg-white border border-[#EDE6D6] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A84C]" placeholder="משימה חדשה..." />
                <button onClick={addEventTask} className="bg-[#0D1B2A] rounded-xl px-4 text-[#E8C97A] font-bold shadow-sm shrink-0">הוסף</button>
+             </div>
+
+             <div className="shrink-0 mb-3">
+               <AIPlanningAssistant
+                 title={currentTasksEvent.name}
+                 contextLines={[
+                   `סוג אירוע: ${typeLabels[currentTasksEvent.type] || currentTasksEvent.type}, תדירות: ${freqLabels[currentTasksEvent.freq] || currentTasksEvent.freq}`,
+                   ...(currentTasksEvent.tasks?.length ? [`משימות שכבר קיימות: ${currentTasksEvent.tasks.map((t: any) => t.text).join(', ')}`] : []),
+                 ]}
+                 onApply={(result) => {
+                   if (!result.tasks?.length) return;
+                   const nextTasks = [...(currentTasksEvent.tasks || []), ...result.tasks.map(text => ({ text, done: false }))];
+                   updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+                 }}
+               />
              </div>
 
              <div className="border-t border-dashed border-[#EDE6D6] pt-3 shrink-0">

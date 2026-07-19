@@ -1,12 +1,24 @@
 import React, { useState } from 'react';
+import { Phone, MessageSquare } from 'lucide-react';
 import { useAppStore } from '../store/AppContext';
 
-// שני כפתורי תיעוד מהיר (טלפון / מפגש) — שמירה מיידית כמפגש דרך ה-API
-// הקיים (addMeeting), בלי לפתוח שום טופס. משותף לכל מקום שמציג איש קשר
-// שכדאי ליצור איתו קשר (אנשי קשר, משימות).
+function resolvePhone(donorName: string, donors: Record<string, any>, crm: Record<string, any>): string {
+  const donor = donors[donorName] || {};
+  const crmData = crm[donorName] || {};
+  let raw = String(crmData.phone || donor['טלפון'] || '').replace(/\D/g, '');
+  if (raw.startsWith('0')) raw = '972' + raw.substring(1);
+  return raw;
+}
+
+// שורת פעולות ליצירת קשר עם איש קשר: התקשרות/וואטסאפ ישירים, ושני כפתורי
+// תיעוד מהיר (טלפון / מפגש) ששומרים מפגש מיד דרך ה-API הקיים (addMeeting),
+// בלי לפתוח שום טופס. משותף לכל מקום שמציג איש קשר שכדאי ליצור איתו קשר
+// (אנשי קשר, משימות).
 export function QuickLogButtons({ donorName, compact = false }: { donorName: string; compact?: boolean }) {
-  const { refresh } = useAppStore();
+  const { refresh, donors, crm } = useAppStore();
   const [logged, setLogged] = useState<Record<string, number>>({});
+
+  const phone = resolvePhone(donorName, donors, crm);
 
   const handleQuickLog = async (meetType: 'טלפון' | 'אישית') => {
     setLogged(prev => ({ ...prev, [meetType]: Date.now() }));
@@ -21,15 +33,37 @@ export function QuickLogButtons({ donorName, compact = false }: { donorName: str
 
   return (
     <div className="flex gap-2">
+      {phone && (
+        <>
+          <a
+            href={`tel:${phone}`}
+            onClick={e => e.stopPropagation()}
+            title="התקשר"
+            className="shrink-0 w-9 flex items-center justify-center bg-blue-50 text-blue-700 border border-blue-200 rounded-lg"
+          >
+            <Phone size={14} />
+          </a>
+          <a
+            href={`https://wa.me/${phone}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            title="WhatsApp"
+            className="shrink-0 w-9 flex items-center justify-center bg-green-50 text-green-700 border border-green-200 rounded-lg"
+          >
+            <MessageSquare size={14} />
+          </a>
+        </>
+      )}
       <button
-        onClick={() => handleQuickLog('טלפון')}
+        onClick={(e) => { e.stopPropagation(); handleQuickLog('טלפון'); }}
         disabled={isRecent('טלפון')}
         className={`flex-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform disabled:opacity-60 ${size}`}
       >
         {isRecent('טלפון') ? '✓ נרשם' : '📞 שוחחתי'}
       </button>
       <button
-        onClick={() => handleQuickLog('אישית')}
+        onClick={(e) => { e.stopPropagation(); handleQuickLog('אישית'); }}
         disabled={isRecent('אישית')}
         className={`flex-1 bg-green-50 text-green-700 border border-green-200 rounded-lg font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform disabled:opacity-60 ${size}`}
       >

@@ -4,11 +4,15 @@ import { getCustomHols, saveCustomHols } from '../lib/api';
 import { Plus, CalendarDays } from 'lucide-react';
 import { HolidayModal } from './HolidayModal';
 
-export function CalendarTab() {
+export function CalendarTab({ addTrigger }: { addTrigger?: { tab: string; count: number } } = {}) {
   const { holidays, holidayExtras } = useAppStore();
   const [customHolidays, setCustomHolidays] = useState(() => getCustomHols());
   const [isAdding, setIsAdding] = useState(false);
   const [selectedHoliday, setSelectedHoliday] = useState<any>(null);
+
+  React.useEffect(() => {
+    if (addTrigger?.tab === 'calendar' && addTrigger.count) setIsAdding(true);
+  }, [addTrigger]);
 
   const handleAdd = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

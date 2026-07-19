@@ -7,9 +7,9 @@ import { DonorsMap } from './DonorsMap';
 import { MergeContactsModal } from './MergeContactsModal';
 import { QuickLogButtons } from './QuickLogButtons';
 import { findGregorianBirthday, findHebrewBirthday, findYahrzeitEntries } from '../lib/donorDates';
-import { computeOverdueContacts } from '../lib/contactFocus';
+import { computeOverdueContacts, computeLastContactByName, formatLastContact } from '../lib/contactFocus';
 
-export function DonorsTab() {
+export function DonorsTab({ addTrigger }: { addTrigger?: { tab: string; count: number } } = {}) {
   const { donors, visibleDonors, hk, failures, crm, donations, refresh, updateCrm, nameMerges } = useAppStore();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
@@ -22,12 +22,18 @@ export function DonorsTab() {
   const [isMergeOpen, setIsMergeOpen] = useState(false);
   const [isContactFocusOpen, setIsContactFocusOpen] = useState(false);
 
+  // כפתור "+" הגלובלי (FAB/סיידבר) — כשמדובר במסך הזה, פותח "הוספת איש קשר"
+  React.useEffect(() => {
+    if (addTrigger?.tab === 'donors' && addTrigger.count) setIsAddContactOpen(true);
+  }, [addTrigger]);
+
   // מי לא יצרנו איתו קשר לאחרונה, לפי מעגל קרבה + זמן שחלף מהמפגש האחרון
   // (הועבר מהדשבורד לכאן — זה המקום הטבעי לרשימת "למי ליצור קשר")
   const overdueContacts = React.useMemo(
     () => computeOverdueContacts(visibleDonors, crm, donations, new Date()),
     [visibleDonors, crm, donations]
   );
+  const lastContactByName = React.useMemo(() => computeLastContactByName(donations), [donations]);
 
   const submitNewContact = async () => {
     const name = newContactName.trim();
@@ -257,7 +263,8 @@ export function DonorsTab() {
                     <div className="text-[11px] text-gray-500 mt-0.5 truncate">
                       {isHk && <span className="text-[#0D1B2A] font-medium mr-1">🔄 הוק</span>}
                       {isErr && <span className="text-red-500 font-medium mr-1">⚠️ שגיאה</span>}
-                      {d.lastDate && <span>אחרונה: {d.lastDate}</span>}
+                      {d.lastDate && <span>תרומה: {d.lastDate}</span>}
+                      <span className="mr-1">🕐 קשר: {formatLastContact(lastContactByName.get(d.name), new Date())}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -349,7 +356,8 @@ export function DonorsTab() {
                       </span>
                     </div>
                     <div className="px-4 py-3 text-xs text-gray-500">
-                      {d.lastDate || '—'}
+                      <div>{d.lastDate || '—'}</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">🕐 {formatLastContact(lastContactByName.get(d.name), new Date())}</div>
                     </div>
                     <div className="px-4 py-3 flex items-center justify-center gap-1">
                       {isHk && <span title="הוראת קבע" className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[10px] flex items-center justify-center font-bold">הק</span>}

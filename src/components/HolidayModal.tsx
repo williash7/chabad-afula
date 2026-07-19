@@ -3,6 +3,7 @@ import { useAppStore } from '../store/AppContext';
 import { createHolidayDoc } from '../lib/api';
 import { X, Check, MessageSquare, FileText, ExternalLink, Loader2, Download, ClipboardList } from 'lucide-react';
 import { createInviteTask, inviteRemainingMinutes, toggleInvitePerson, MINUTES_PER_CALL } from '../lib/tasks';
+import { AIPlanningAssistant } from './AIPlanningAssistant';
 
 export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () => void }) {
   const { holidayExtras, updateHolidayExtras, visibleDonors, crm, hk, failures } = useAppStore();
@@ -23,6 +24,7 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
   today.setHours(0, 0, 0, 0);
   const hDate = new Date(holiday.dateStr);
   const days = Math.ceil((hDate.getTime() - today.getTime()) / 86400000);
+  const dateLabel = isNaN(hDate.getTime()) ? '' : hDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
 
   const [insightForm, setInsightForm] = useState(extra.insights || { good: '', improve: '', plan: '' });
   const [lastYearForm, setLastYearForm] = useState(extra.lastYear || { donors: '', amount: '' });
@@ -128,6 +130,12 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
     const nextTasks = [...(extra.tasks || []), { text: addTaskText.trim(), done: false }];
     updateHolidayExtras(id, { tasks: nextTasks });
     setAddTaskText('');
+  };
+
+  const deleteTask = (idx: number) => {
+    const nextTasks = [...(extra.tasks || [])];
+    nextTasks.splice(idx, 1);
+    updateHolidayExtras(id, { tasks: nextTasks });
   };
 
   const handleExportReport = () => {
@@ -373,7 +381,10 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
                 <div key={i} className="bg-white rounded-xl p-3 shadow-sm">
                   <div className="flex items-center justify-between mb-2">
                     <span className={`text-sm font-bold ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
-                    <span className="text-[10px] text-gray-400 shrink-0">נותרו ~{inviteRemainingMinutes(t)} דק'</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] text-gray-400">נותרו ~{inviteRemainingMinutes(t)} דק'</span>
+                      <button onClick={() => deleteTask(i)} className="text-red-300 hover:text-red-500" title="מחק משימה"><X size={14} /></button>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {(t.people || []).map((p: string) => {
@@ -395,19 +406,44 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
                   </div>
                 </div>
               ) : (
-                <div key={i} onClick={() => toggleTask(i)} className="bg-white rounded-xl p-3 shadow-sm flex items-center gap-3 cursor-pointer">
-                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
+                <div key={i} className="bg-white rounded-xl p-3 shadow-sm flex items-center gap-3">
+                  <div onClick={() => toggleTask(i)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 cursor-pointer ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
                     {t.done && <Check size={12} className="text-white" />}
                   </div>
-                  <span className={`text-sm ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+                  <span onClick={() => toggleTask(i)} className={`text-sm flex-1 cursor-pointer ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+                  <button onClick={() => deleteTask(i)} className="text-red-300 hover:text-red-500 shrink-0" title="מחק משימה"><X size={14} /></button>
                 </div>
               )
             )) : null}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-3">
             <input value={addTaskText} onChange={e => setAddTaskText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTask()} type="text" className="flex-1 bg-white border border-[#EDE6D6] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A84C]" placeholder="משימה חדשה..." />
             <button onClick={addTask} className="bg-[#0D1B2A] rounded-xl px-4 text-[#E8C97A] font-bold shadow-sm">הוסף</button>
           </div>
+
+          <AIPlanningAssistant
+            title={holiday.name}
+            includeBudget
+            includeReminders
+            contextLines={[
+              `החג בעוד ${days > 0 ? days : 0} ימים (${dateLabel})`,
+              ...(extra.lastYear?.donors || extra.lastYear?.amount ? [`בשנה שעברה: ${extra.lastYear?.donors || '?'} תורמים, ₪${extra.lastYear?.amount || '?'} גיוס`] : []),
+              ...(extra.tasks?.length ? [`משימות שכבר קיימות: ${extra.tasks.map((t: any) => t.text).join(', ')}`] : []),
+            ]}
+            onApply={(result) => {
+              let nextTasks = extra.tasks || [];
+              if (result.tasks?.length) nextTasks = [...nextTasks, ...result.tasks.map(text => ({ text, done: false }))];
+              let nextBudget = extra.budget || { expenses: [], income: [] };
+              if (result.budget?.length) {
+                const newExpenses = result.budget.filter(b => b.type === 'expense').map(b => ({ name: b.name, planned: b.amount, actual: '' }));
+                const newIncome = result.budget.filter(b => b.type === 'income').map(b => ({ name: b.name, planned: b.amount, actual: '' }));
+                nextBudget = { expenses: [...(nextBudget.expenses || []), ...newExpenses], income: [...(nextBudget.income || []), ...newIncome] };
+              }
+              let nextReminders = extra.reminders || [];
+              if (result.reminders?.length) nextReminders = [...nextReminders, ...result.reminders.map(r => ({ title: r.title, days: String(r.days), wa: false }))];
+              updateHolidayExtras(id, { tasks: nextTasks, budget: nextBudget, reminders: nextReminders });
+            }}
+          />
         </div>
 
         {/* Invitations Section */}

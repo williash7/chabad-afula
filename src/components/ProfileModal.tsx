@@ -14,9 +14,10 @@ import {
   gregorianPairFor, hebrewPairFor,
 } from '../lib/donorDates';
 import { toCanonicalHebrewString, parseCanonicalHebrewString, hebrewToGregorianCompanion, gregorianToHebrewCompanion } from '../lib/hebrewDates';
+import { computeLastContactByName, formatLastContact } from '../lib/contactFocus';
 
 export function ProfileModal({ name, onClose }: { name: string, onClose: () => void }) {
-  const { donors, crm, updateCrm, refresh } = useAppStore();
+  const { donors, crm, donations, updateCrm, refresh } = useAppStore();
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
   const [isEditingFields, setIsEditingFields] = useState(false);
@@ -31,6 +32,7 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
 
   const donor = donors[name] || { name, total: 0, donations: [], lastDate: '' };
   const crmData = crm[name] || { circle: 'far', target: false, phone: '' };
+  const lastContactDate = React.useMemo(() => computeLastContactByName(donations).get(name), [donations, name]);
 
   const getHebrewPickerValue = (key: string): HebrewDateValue => {
     if (hebrewPickerValues[key]) return hebrewPickerValues[key];
@@ -236,8 +238,15 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
           </div>
           <div className="text-center px-2">
             <div className="font-['Frank_Ruhl_Libre'] text-sm font-bold text-[#0D1B2A] mt-1 line-clamp-1">{donor.lastDate || '—'}</div>
-            <div className="text-[10px] text-gray-500 mt-0.5">אחרונה</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">תרומה אחרונה</div>
           </div>
+        </div>
+
+        {/* Last contact */}
+        <div className="bg-white rounded-xl p-3 shadow-sm mb-5 flex items-center justify-center gap-2">
+          <span className="text-base">🕐</span>
+          <span className="text-xs text-gray-500">יצירת קשר אחרונה:</span>
+          <span className="text-xs font-bold text-[#0D1B2A]">{formatLastContact(lastContactDate, new Date())}</span>
         </div>
 
         {/* Important dates: birthdays + parents' yahrzeits */}

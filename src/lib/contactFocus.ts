@@ -12,12 +12,9 @@ export interface OverdueContact {
 const CIRCLE_LABEL: Record<string, string> = { close: '⭐ קרוב', approach: '🔄 מתקרב', third: '⭕ מעגל שלישי' };
 const CIRCLE_THRESHOLD: Record<string, number> = { close: 14, approach: 30, third: 60 };
 
-export function computeOverdueContacts(
-  visibleDonors: Record<string, any>,
-  crm: Record<string, any>,
-  donations: any[],
-  today: Date
-): OverdueContact[] {
+// תאריך המפגש (לא תרומה!) האחרון שתועד לכל תורם — מהיומן המשותף
+// donations/meetings שכבר קיים (amount===0 = רשומת מפגש, כמו ב-ReportsTab).
+export function computeLastContactByName(donations: any[]): Map<string, Date> {
   const lastMeetingByName = new Map<string, Date>();
   (donations as any[]).forEach(d => {
     if ((d.amount || 0) !== 0 || !d.name) return;
@@ -28,6 +25,24 @@ export function computeOverdueContacts(
     const prev = lastMeetingByName.get(d.name);
     if (!prev || parsed > prev) lastMeetingByName.set(d.name, parsed);
   });
+  return lastMeetingByName;
+}
+
+export function formatLastContact(date: Date | undefined, today: Date): string {
+  if (!date) return 'מעולם לא תועד';
+  const days = Math.floor((today.getTime() - date.getTime()) / 86400000);
+  if (days === 0) return 'היום';
+  if (days === 1) return 'אתמול';
+  return `לפני ${days} ימים`;
+}
+
+export function computeOverdueContacts(
+  visibleDonors: Record<string, any>,
+  crm: Record<string, any>,
+  donations: any[],
+  today: Date
+): OverdueContact[] {
+  const lastMeetingByName = computeLastContactByName(donations);
 
   const overdue: OverdueContact[] = [];
   Object.keys(visibleDonors).forEach(name => {

@@ -6,9 +6,10 @@ interface SideNavProps {
   currentTab: string;
   setTab: (tab: string) => void;
   onDonationClick: () => void;
+  addLabel?: string;
 }
 
-export function SideNav({ currentTab, setTab, onDonationClick }: SideNavProps) {
+export function SideNav({ currentTab, setTab, onDonationClick, addLabel }: SideNavProps) {
   const { hebrewDate, summary, refresh } = useAppStore();
 
   const navItems = [
@@ -76,13 +77,15 @@ export function SideNav({ currentTab, setTab, onDonationClick }: SideNavProps) {
 
       {/* Bottom actions */}
       <div className="p-4 border-t border-white/10 space-y-2">
-        <button
-          onClick={onDonationClick}
-          className="w-full flex items-center justify-center gap-2 bg-gradient-to-br from-[#C9A84C] to-[#9B7A2F] text-white font-bold py-2.5 rounded-xl text-sm shadow-lg hover:opacity-90 active:scale-95 transition-all"
-        >
-          <Plus size={16} />
-          הוסף תרומה
-        </button>
+        {addLabel && (
+          <button
+            onClick={onDonationClick}
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-br from-[#C9A84C] to-[#9B7A2F] text-white font-bold py-2.5 rounded-xl text-sm shadow-lg hover:opacity-90 active:scale-95 transition-all"
+          >
+            <Plus size={16} />
+            הוסף {addLabel}
+          </button>
+        )}
         <button
           onClick={() => refresh()}
           className="w-full flex items-center justify-center gap-2 text-white/30 hover:text-white/55 py-1.5 rounded-xl text-xs transition-colors"
