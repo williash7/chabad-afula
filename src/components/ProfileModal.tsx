@@ -6,7 +6,9 @@ import { DonationModal } from './DonationModal';
 import { MeetingModal } from './MeetingModal';
 import { ThankYouModal } from './ThankYouModal';
 import { DateConverterModal } from './DateConverterModal';
+import { MergeContactsModal } from './MergeContactsModal';
 import { HDate } from '@hebcal/core';
+import { Link2 } from 'lucide-react';
 
 export function ProfileModal({ name, onClose }: { name: string, onClose: () => void }) {
   const { donors, crm, updateCrm, refresh } = useAppStore();
@@ -18,6 +20,7 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
   const [isDonationOpen, setIsDonationOpen] = useState(false);
   const [isMeetingOpen, setIsMeetingOpen] = useState(false);
   const [isDateConverterOpen, setIsDateConverterOpen] = useState(false);
+  const [isMergeOpen, setIsMergeOpen] = useState(false);
   const [thankYouInfo, setThankYouInfo] = useState<{amount: number} | null>(null);
   
   const donor = donors[name] || { name, total: 0, donations: [], lastDate: '' };
@@ -173,6 +176,13 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
         <div className="flex justify-between items-start mb-4">
            <button onClick={onClose} className="p-2 bg-white rounded-full shadow-sm">
              <X size={20} className="text-gray-500" />
+           </button>
+           <button
+             onClick={() => setIsMergeOpen(true)}
+             className="flex items-center gap-1.5 bg-white px-3 py-2 rounded-full shadow-sm text-xs font-bold text-gray-500 hover:text-[#0D1B2A] transition-colors"
+             title="חיבור עם איש קשר כפול"
+           >
+             <Link2 size={14} /> מזג עם איש קשר אחר
            </button>
         </div>
 
@@ -562,6 +572,7 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
       {isDonationOpen && <DonationModal onClose={() => setIsDonationOpen(false)} defaultName={name} />}
       {isMeetingOpen && <MeetingModal onClose={() => setIsMeetingOpen(false)} donorName={name} />}
       {isDateConverterOpen && <DateConverterModal onClose={() => setIsDateConverterOpen(false)} />}
+      {isMergeOpen && <MergeContactsModal onClose={() => setIsMergeOpen(false)} presetName={name} onMerged={onClose} />}
       {thankYouInfo && <ThankYouModal donorName={name} amount={thankYouInfo.amount} phone={crmData.phone || ''} onClose={() => setThankYouInfo(null)} />}
     </div>
   );

@@ -7,6 +7,7 @@ import {
   getManualDonations, saveManualDonations,
 } from '../lib/api';
 import { Donor, Donation, ReportSummary } from '../types';
+import { extractMerges, applyMergesToCrm, coalesceDonorsByMerges, resolveCanonicalName, MERGES_KEY } from '../lib/nameMerges';
 
 interface AppState {
   summary: ReportSummary | null;
@@ -24,12 +25,15 @@ interface AppState {
   crm: Record<string, any>;
   holidayExtras: Record<string, any>;
   eventsData: any[];
+  nameMerges: Record<string, string>;
   refresh: () => void;
   addManualDonation: (donation: any) => void;
   updateCrm: (name: string, data: any) => void;
   updateHolidayExtras: (id: string, data: any) => void;
   updateEventsData: (data: any[]) => void;
   updateRebbeDate: (date: Date) => void;
+  mergeContacts: (aliasName: string, canonicalName: string) => void;
+  unmergeContact: (aliasName: string) => void;
 }
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -52,7 +56,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [apiError, setApiError] = useState<string | null>(null);
 
   // Start with localStorage so the UI renders immediately, then cloud data overwrites
-  const [crm, setCrm] = useState<Record<string, any>>(getCRMData());
+  const initialCrm = extractMerges(getCRMData());
+  const [crm, setCrm] = useState<Record<string, any>>(initialCrm.crmRest);
+  const [nameMerges, setNameMerges] = useState<Record<string, string>>(initialCrm.merges);
   const [holidayExtras, setHolidayExtras] = useState<Record<string, any>>({});
   const [eventsData, setEventsData] = useState<any[]>([]);
 
@@ -100,14 +106,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadHebcal();
 
     // Load cloud-synced data in parallel with the main API calls
-    let resolvedCrm: Record<string, any> = getCRMData();
+    let resolvedCrm: Record<string, any> = extractMerges(getCRMData()).crmRest;
+    let resolvedMerges: Record<string, string> = extractMerges(getCRMData()).merges;
     const cloudLoads = Promise.all([
       getCRMDataCloud(),
       getEventsDataCloud(),
       getHolidayExtrasCloud(),
     ]).then(([cloudCrm, cloudEvents, cloudExtras]) => {
-      resolvedCrm = cloudCrm;
-      setCrm(cloudCrm);
+      const { merges, crmRest } = extractMerges(cloudCrm);
+      const cleanedCrm = applyMergesToCrm(crmRest, merges);
+      resolvedCrm = cleanedCrm;
+      resolvedMerges = merges;
+      setCrm(cleanedCrm);
+      setNameMerges(merges);
       setEventsData(cloudEvents);
       setHolidayExtras(cloudExtras);
     }).catch(console.error);
@@ -172,7 +183,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Merge: manual donations not already present in server list (deduplicate by name+date+amount)
       const serverKeys = new Set(serverDonations.map((d: any) => `${d.name}|${d.date}|${d.amount}`));
       const uniqueManual = manualDonations.filter((d: any) => !serverKeys.has(`${d.name}|${d.date}|${d.amount}`));
-      const allDonations = [...serverDonations, ...uniqueManual];
+      // שם קנוני (אחרי מיזוגי אנשי קשר) לכל רשומה — כדי שתרומות/מפגשים של שני
+      // שמות ממוזגים יופיעו כמקשה אחת בכל מקום שמשתמש ברשימת donations הזו
+      const allDonations = [...serverDonations, ...uniqueManual].map((d: any) =>
+        d && d.name ? { ...d, name: resolveCanonicalName(d.name, resolvedMerges) } : d
+      );
 
       if (allDonations.length > 0) {
         setDonations(allDonations);
@@ -190,7 +205,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
         });
       }
-      setDonors(map);
+      // מעביר כינויים (למשל "אברהם אריאל") לתוך הרשומה הקנונית — מקפל כפילויות
+      // שנוצרו מרשומות תורם נפרדות בגיליון עבור אותו אדם.
+      setDonors(coalesceDonorsByMerges(map, resolvedMerges));
 
       if (failRes.failures) setFailures(failRes.failures);
       if (hkRes.hk) setHk(hkRes.hk);
@@ -234,6 +251,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // ממזג שני שמות (למשל "אברהם אריאל" ו"אברהם אריאל ציגנוב") לאיש קשר אחד.
+  // aliasName נעלם מהרשימות; כל התרומות/המפגשים/פרטי ה-CRM שלו עוברים ל-canonicalName.
+  // מתעדכן מיידית בצד הלקוח (בלי סיבוב רשת), ונשמר ברקע לענן.
+  const mergeContacts = (aliasName: string, canonicalName: string) => {
+    if (!aliasName || !canonicalName || aliasName === canonicalName) return;
+    setNameMerges(prevMerges => {
+      const nextMerges = { ...prevMerges, [aliasName]: canonicalName };
+      saveCRMDataCloud({ ...crm, [MERGES_KEY]: nextMerges });
+      return nextMerges;
+    });
+    setDonations(prev => prev.map(d => (d.name === aliasName ? { ...d, name: canonicalName } : d)));
+    setDonors(prev => coalesceDonorsByMerges(prev, { [aliasName]: canonicalName }));
+    setCrm(prev => {
+      if (!prev[aliasName]) return prev;
+      const { [aliasName]: aliasData, ...rest } = prev;
+      const canonicalData = rest[canonicalName] || {};
+      rest[canonicalName] = {
+        circle: canonicalData.circle || aliasData.circle,
+        target: canonicalData.target ?? aliasData.target,
+        phone: canonicalData.phone || aliasData.phone,
+        customFields: { ...(aliasData.customFields || {}), ...(canonicalData.customFields || {}) },
+      };
+      return rest;
+    });
+  };
+
+  // מבטל מיזוג — טוען מחדש מהשרת כדי לפצל בחזרה לשתי רשומות נפרדות עם הנתונים המקוריים
+  const unmergeContact = (aliasName: string) => {
+    setNameMerges(prevMerges => {
+      const nextMerges = { ...prevMerges };
+      delete nextMerges[aliasName];
+      saveCRMDataCloud({ ...crm, [MERGES_KEY]: nextMerges });
+      return nextMerges;
+    });
+    setTimeout(() => loadAll(), 400);
+  };
+
   const updateHolidayExtras = (id: string, data: any) => {
     setHolidayExtras(prev => {
       const next = { ...prev, [id]: { ...(prev[id] || {}), ...data } };
@@ -265,8 +319,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider value={{
       summary, donations, donors, hk, failures, rebbeDate,
       shabbat, holidays, hebrewDate,
-      loading, loadingText, apiError, crm, holidayExtras, eventsData, refresh: loadAll,
+      loading, loadingText, apiError, crm, holidayExtras, eventsData, nameMerges, refresh: loadAll,
       addManualDonation, updateCrm, updateHolidayExtras, updateEventsData, updateRebbeDate,
+      mergeContacts, unmergeContact,
     }}>
       {children}
     </AppContext.Provider>

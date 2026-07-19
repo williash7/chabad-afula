@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Search, RefreshCw, Plus, Users, Map, Navigation, MapPin, X } from 'lucide-react';
+import { Search, RefreshCw, Plus, Users, Map, Navigation, MapPin, X, Link2 } from 'lucide-react';
 import { Donor } from '../types';
 import { ProfileModal } from './ProfileModal';
 import { DonorsMap } from './DonorsMap';
+import { MergeContactsModal } from './MergeContactsModal';
+import { findGregorianBirthday, findHebrewBirthday, findYahrzeitEntries } from '../lib/donorDates';
 
 export function DonorsTab() {
-  const { donors, hk, failures, crm, refresh, updateCrm } = useAppStore();
+  const { donors, hk, failures, crm, refresh, updateCrm, nameMerges } = useAppStore();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('total');
@@ -15,6 +17,7 @@ export function DonorsTab() {
   const [isAddContactOpen, setIsAddContactOpen] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [isMergeOpen, setIsMergeOpen] = useState(false);
 
   const submitNewContact = async () => {
     const name = newContactName.trim();
@@ -62,7 +65,7 @@ export function DonorsTab() {
   const getNearestDateDays = (d: Donor) => {
     let minDays = 365;
     const today = new Date();
-    const gBday = (d as any)['תאריך לידה'] || (d as any)['יום הולדת'];
+    const gBday = findGregorianBirthday(d as any);
     if (gBday) {
       let day = 0, m = 0;
       const gStr = String(gBday);
@@ -79,9 +82,9 @@ export function DonorsTab() {
         if (dist < minDays) minDays = dist;
       }
     }
-    const hBday = String((d as any)['תאריך לידה עברי'] || '');
-    const yahrzeit = String((d as any)['יארצייט'] || (d as any)['יורצייט'] || (d as any)['יום השנה'] || '');
-    if (minDays === 365 && (hBday || yahrzeit)) return 364;
+    const hBday = findHebrewBirthday(d as any) || '';
+    const yahrzeitEntries = findYahrzeitEntries(d as any);
+    if (minDays === 365 && (hBday || yahrzeitEntries.length > 0)) return 364;
     return minDays;
   };
 
@@ -128,6 +131,18 @@ export function DonorsTab() {
             title="מסלול ביקורים"
           >
             <Map size={17} />
+          </button>
+          <button
+            onClick={() => setIsMergeOpen(true)}
+            className="relative w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0 hover:bg-white/20 transition-colors"
+            title="חיבור אנשי קשר כפולים"
+          >
+            <Link2 size={16} />
+            {Object.keys(nameMerges).length > 0 && (
+              <span className="absolute -top-0.5 -left-0.5 w-4 h-4 bg-[#C9A84C] text-[#0D1B2A] rounded-full text-[9px] font-bold flex items-center justify-center">
+                {Object.keys(nameMerges).length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setIsAddContactOpen(true)}
@@ -470,6 +485,8 @@ export function DonorsTab() {
           </div>
         </div>
       )}
+
+      {isMergeOpen && <MergeContactsModal onClose={() => setIsMergeOpen(false)} />}
     </div>
   );
 }

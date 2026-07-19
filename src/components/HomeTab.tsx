@@ -8,6 +8,7 @@ import { ThankYouModal } from './ThankYouModal';
 import { HDate } from '@hebcal/core';
 import { format } from 'date-fns';
 import { getCustomHols } from '../lib/api';
+import { findGregorianBirthday, findHebrewBirthday, findYahrzeitEntries } from '../lib/donorDates';
 
 export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => void, onDonationClick: () => void }) {
   const { summary, donations, failures, rebbeDate, crm, donors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras, refresh } = useAppStore();
@@ -91,12 +92,10 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
 
     Object.keys(donors).forEach(name => {
       const donor = donors[name];
-      const hBday = (donor as any)['תאריך לידה עברי'] || crm[name]?.customFields?.['תאריך לידה עברי'];
-      const gBday = (donor as any)['תאריך לידה'] || (donor as any)['יום הולדת'];
       const combinedForDates = { ...(donor as any), ...(crm[name]?.customFields || {}) };
-      const yahrzeitEntries = Object.keys(combinedForDates)
-        .filter(k => /יארצייט|יורצייט|פטירה|יום השנה/.test(k) && combinedForDates[k])
-        .map(k => ({ key: k, value: String(combinedForDates[k]) }));
+      const hBday = findHebrewBirthday(combinedForDates);
+      const gBday = findGregorianBirthday(combinedForDates);
+      const yahrzeitEntries = findYahrzeitEntries(combinedForDates);
 
       let hasDateEvent = false;
       if (hBday) {
