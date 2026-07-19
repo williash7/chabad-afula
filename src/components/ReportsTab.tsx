@@ -7,6 +7,7 @@ export function ReportsTab() {
   const { summary, donations, donors, crm, refresh } = useAppStore();
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [showAllDonations, setShowAllDonations] = useState(false);
+  const [donTab, setDonTab] = useState<'donations' | 'meetings' | 'all'>('donations');
   const [donSearch, setDonSearch] = useState('');
   const [donMethod, setDonMethod] = useState('');
   const [donPurpose, setDonPurpose] = useState('');
@@ -35,18 +36,24 @@ export function ReportsTab() {
   const uniquePurposes = Array.from(new Set(donations.map(d => d.purpose).filter(p => !!p)));
   const uniqueMethods = Array.from(new Set(donations.map(d => d.method).filter(m => !!m)));
 
+  const isDonation = (d: any) => (d.amount || 0) > 0;
+  const isMeeting  = (d: any) => (d.amount || 0) === 0;
+
   const filteredDonations = useMemo(() => {
-    let list = [...donations];
+    let list = [...donations] as any[];
+    if (donTab === 'donations') list = list.filter(isDonation);
+    else if (donTab === 'meetings') list = list.filter(isMeeting);
     if (donSearch) list = list.filter(d => (d.name || '').toLowerCase().includes(donSearch.toLowerCase()));
     if (donMethod) list = list.filter(d => d.method === donMethod);
-    if (donPurpose) list = list.filter(d => d.purpose === donPurpose);
+    if (donPurpose) list = list.filter(d => d.purpose === donPurpose || d.meetPurpose === donPurpose);
     list.sort((a, b) => {
       if (donSort === 'amount') return (b.amount || 0) - (a.amount || 0);
+      const dateOf = (d: any) => d.date || d.meetDate || '';
       const toTs = (s: string) => s ? new Date(s.split('/').reverse().join('-')).getTime() : 0;
-      return toTs(b.date) - toTs(a.date);
+      return toTs(dateOf(b)) - toTs(dateOf(a));
     });
     return list;
-  }, [donations, donSearch, donMethod, donPurpose, donSort]);
+  }, [donations, donTab, donSearch, donMethod, donPurpose, donSort]);
 
   const pagedDonations = filteredDonations.slice(0, (donPage + 1) * PAGE_SIZE);
 
@@ -205,14 +212,29 @@ export function ReportsTab() {
           >
             <div className="flex items-center gap-2">
               <List size={18} className="text-[#C9A84C]" />
-              <span className="font-['Frank_Ruhl_Libre'] font-bold text-[#0D1B2A]">כל התרומות</span>
-              <span className="text-xs text-gray-400">({donations.length})</span>
+              <span className="font-['Frank_Ruhl_Libre'] font-bold text-[#0D1B2A]">יומן פעילות</span>
+              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                💰 {(donations as any[]).filter(isDonation).length} · 📝 {(donations as any[]).filter(isMeeting).length}
+              </span>
             </div>
             <ChevronDown size={18} className={`text-gray-400 transition-transform ${showAllDonations ? 'rotate-180' : ''}`} />
           </button>
 
           {showAllDonations && (
             <div className="border-t border-[#EDE6D6]">
+              {/* Tabs */}
+              <div className="flex border-b border-[#EDE6D6]">
+                {([['donations','💰 תרומות'], ['meetings','📝 מפגשים'], ['all','הכל']] as const).map(([id, label]) => (
+                  <button
+                    key={id}
+                    onClick={() => { setDonTab(id); setDonPage(0); setDonMethod(''); setDonPurpose(''); }}
+                    className={`flex-1 py-2.5 text-sm font-bold transition-colors ${donTab === id ? 'text-[#C9A84C] border-b-2 border-[#C9A84C]' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
               {/* Filters */}
               <div className="p-3 flex flex-wrap gap-2 bg-[#FAF6EE]">
                 <div className="flex items-center gap-2 bg-white border border-[#EDE6D6] rounded-xl px-3 py-1.5 flex-1 min-w-[140px]">
@@ -225,14 +247,16 @@ export function ReportsTab() {
                     className="bg-transparent outline-none text-sm w-full"
                   />
                 </div>
-                <select
-                  value={donMethod}
-                  onChange={e => { setDonMethod(e.target.value); setDonPage(0); }}
-                  className="border border-[#EDE6D6] rounded-xl px-2 py-1.5 text-sm bg-white outline-none focus:border-[#C9A84C]"
-                >
-                  <option value="">כל האפיקים</option>
-                  {uniqueMethods.map(m => <option key={m as string} value={m as string}>{m as string}</option>)}
-                </select>
+                {donTab !== 'meetings' && (
+                  <select
+                    value={donMethod}
+                    onChange={e => { setDonMethod(e.target.value); setDonPage(0); }}
+                    className="border border-[#EDE6D6] rounded-xl px-2 py-1.5 text-sm bg-white outline-none focus:border-[#C9A84C]"
+                  >
+                    <option value="">כל האפיקים</option>
+                    {uniqueMethods.map(m => <option key={m as string} value={m as string}>{m as string}</option>)}
+                  </select>
+                )}
                 <select
                   value={donPurpose}
                   onChange={e => { setDonPurpose(e.target.value); setDonPage(0); }}
@@ -241,46 +265,72 @@ export function ReportsTab() {
                   <option value="">כל הייעודים</option>
                   {uniquePurposes.map(p => <option key={p as string} value={p as string}>{p as string}</option>)}
                 </select>
-                <select
-                  value={donSort}
-                  onChange={e => setDonSort(e.target.value as 'date' | 'amount')}
-                  className="border border-[#EDE6D6] rounded-xl px-2 py-1.5 text-sm bg-white outline-none focus:border-[#C9A84C]"
-                >
-                  <option value="date">מיון: תאריך</option>
-                  <option value="amount">מיון: סכום</option>
-                </select>
+                {donTab !== 'meetings' && (
+                  <select
+                    value={donSort}
+                    onChange={e => setDonSort(e.target.value as 'date' | 'amount')}
+                    className="border border-[#EDE6D6] rounded-xl px-2 py-1.5 text-sm bg-white outline-none focus:border-[#C9A84C]"
+                  >
+                    <option value="date">מיון: תאריך</option>
+                    <option value="amount">מיון: סכום</option>
+                  </select>
+                )}
               </div>
 
               {/* Table header — desktop only */}
-              <div className="hidden md:grid grid-cols-[1fr_6rem_6rem_9rem_1fr] gap-0 bg-gray-50 border-b border-[#EDE6D6] text-[11px] font-bold text-gray-500 uppercase tracking-wide px-4 py-2">
-                <div>שם</div>
-                <div>תאריך</div>
-                <div className="text-left">סכום</div>
-                <div>אפיק</div>
-                <div>ייעוד</div>
-              </div>
+              {donTab !== 'meetings' ? (
+                <div className="hidden md:grid grid-cols-[1fr_6rem_6rem_9rem_1fr] gap-0 bg-gray-50 border-b border-[#EDE6D6] text-[11px] font-bold text-gray-500 uppercase tracking-wide px-4 py-2">
+                  <div>שם</div><div>תאריך</div><div className="text-left">סכום</div><div>אפיק</div><div>ייעוד</div>
+                </div>
+              ) : (
+                <div className="hidden md:grid grid-cols-[1fr_6rem_6rem_1fr_1fr] gap-0 bg-gray-50 border-b border-[#EDE6D6] text-[11px] font-bold text-gray-500 uppercase tracking-wide px-4 py-2">
+                  <div>שם</div><div>תאריך מפגש</div><div>מיקום</div><div>מטרה</div><div>הערות</div>
+                </div>
+              )}
 
               {/* Rows */}
               <div className="divide-y divide-[#EDE6D6]">
                 {pagedDonations.length === 0 ? (
-                  <div className="text-center py-8 text-gray-400 text-sm">לא נמצאו תרומות</div>
-                ) : pagedDonations.map((d, i) => (
-                  <div key={i} className="px-4 py-2.5 md:grid md:grid-cols-[1fr_6rem_6rem_9rem_1fr] md:items-center hover:bg-[#FAF6EE] transition-colors">
-                    {/* Mobile: single line */}
-                    <div className="flex justify-between items-center md:contents">
-                      <div className="md:contents">
-                        <div className="text-sm font-semibold text-[#0D1B2A]">{d.name || '—'}</div>
-                        <div className="text-[11px] text-gray-400 md:hidden">{d.date} · {d.method}</div>
-                      </div>
-                      <div className="text-right md:text-left md:contents">
-                        <span className="hidden md:block text-[12px] text-gray-500">{d.date || '—'}</span>
-                        <span className="font-['Frank_Ruhl_Libre'] font-bold text-[#9B7A2F] text-sm">₪{(d.amount || 0).toLocaleString()}</span>
-                        <span className="hidden md:block text-[12px] text-gray-500">{d.method || '—'}</span>
-                        <span className="hidden md:block text-[12px] text-gray-400 truncate">{d.purpose || '—'}</span>
+                  <div className="text-center py-8 text-gray-400 text-sm">לא נמצאו רשומות</div>
+                ) : pagedDonations.map((d: any, i: number) => {
+                  const isMeet = (d.amount || 0) === 0;
+                  return (
+                    <div key={i} className={`px-4 py-2.5 hover:bg-[#FAF6EE] transition-colors ${
+                      isMeet ? 'md:grid md:grid-cols-[1fr_6rem_6rem_1fr_1fr] md:items-center'
+                              : 'md:grid md:grid-cols-[1fr_6rem_6rem_9rem_1fr] md:items-center'
+                    }`}>
+                      <div className="flex justify-between items-center md:contents">
+                        <div className="md:contents">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm">{isMeet ? '📝' : '💰'}</span>
+                            <span className="text-sm font-semibold text-[#0D1B2A]">{d.name || '—'}</span>
+                          </div>
+                          <div className="text-[11px] text-gray-400 md:hidden">
+                            {isMeet ? (d.meetDate || d.date) : d.date}
+                            {isMeet ? (d.location ? ` · ${d.location}` : '') : (d.method ? ` · ${d.method}` : '')}
+                          </div>
+                        </div>
+                        <div className="text-right md:text-left md:contents shrink-0">
+                          {isMeet ? (
+                            <>
+                              <span className="hidden md:block text-[12px] text-gray-500">{d.meetDate || d.date || '—'}</span>
+                              <span className="hidden md:block text-[12px] text-gray-500">{d.location || '—'}</span>
+                              <span className="hidden md:block text-[12px] text-gray-400 truncate">{d.meetPurpose || d.purpose || '—'}</span>
+                              <span className="hidden md:block text-[12px] text-gray-400 truncate">{d.notes || '—'}</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="hidden md:block text-[12px] text-gray-500">{d.date || '—'}</span>
+                              <span className="font-['Frank_Ruhl_Libre'] font-bold text-[#9B7A2F] text-sm">₪{(d.amount || 0).toLocaleString()}</span>
+                              <span className="hidden md:block text-[12px] text-gray-500">{d.method || '—'}</span>
+                              <span className="hidden md:block text-[12px] text-gray-400 truncate">{d.purpose || '—'}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Load more */}
@@ -295,10 +345,12 @@ export function ReportsTab() {
 
               {/* Summary footer */}
               <div className="px-4 py-2.5 bg-[#FAF6EE] border-t border-[#EDE6D6] flex justify-between items-center text-sm">
-                <span className="text-gray-500">{filteredDonations.length} תרומות</span>
-                <span className="font-['Frank_Ruhl_Libre'] font-bold text-[#0D1B2A]">
-                  סה"כ: ₪{filteredDonations.reduce((s, d) => s + (d.amount || 0), 0).toLocaleString()}
-                </span>
+                <span className="text-gray-500">{filteredDonations.length} רשומות</span>
+                {donTab !== 'meetings' && (
+                  <span className="font-['Frank_Ruhl_Libre'] font-bold text-[#0D1B2A]">
+                    סה"כ: ₪{(filteredDonations as any[]).reduce((s, d) => s + (d.amount || 0), 0).toLocaleString()}
+                  </span>
+                )}
               </div>
             </div>
           )}
