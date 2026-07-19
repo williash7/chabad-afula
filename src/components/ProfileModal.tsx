@@ -7,8 +7,13 @@ import { MeetingModal } from './MeetingModal';
 import { ThankYouModal } from './ThankYouModal';
 import { DateConverterModal } from './DateConverterModal';
 import { MergeContactsModal } from './MergeContactsModal';
-import { HDate } from '@hebcal/core';
+import { HebrewDatePicker, emptyHebrewDateValue, hebrewDateValueToHDate, hdateToValue, type HebrewDateValue } from './HebrewDatePicker';
 import { Link2 } from 'lucide-react';
+import {
+  isImportantDateKey, isYahrzeitKey, isHebrewStyleDateKey,
+  gregorianPairFor, hebrewPairFor,
+} from '../lib/donorDates';
+import { toCanonicalHebrewString, parseCanonicalHebrewString, hebrewToGregorianCompanion, gregorianToHebrewCompanion } from '../lib/hebrewDates';
 
 export function ProfileModal({ name, onClose }: { name: string, onClose: () => void }) {
   const { donors, crm, updateCrm, refresh } = useAppStore();
@@ -16,62 +21,76 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
   const [phoneInput, setPhoneInput] = useState('');
   const [isEditingFields, setIsEditingFields] = useState(false);
   const [editedFields, setEditedFields] = useState<Record<string, string>>({});
+  const [hebrewPickerValues, setHebrewPickerValues] = useState<Record<string, HebrewDateValue>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isDonationOpen, setIsDonationOpen] = useState(false);
   const [isMeetingOpen, setIsMeetingOpen] = useState(false);
   const [isDateConverterOpen, setIsDateConverterOpen] = useState(false);
   const [isMergeOpen, setIsMergeOpen] = useState(false);
   const [thankYouInfo, setThankYouInfo] = useState<{amount: number} | null>(null);
-  
+
   const donor = donors[name] || { name, total: 0, donations: [], lastDate: '' };
   const crmData = crm[name] || { circle: 'far', target: false, phone: '' };
 
-  // שדות "תאריך חשוב": יום הולדת (עברי/לועזי) ויארצייט/פטירה — כולל שדות
-  // מרובים כמו "יארצייט אב" ו"יארצייט אם", כל שם עמודה שקיים בגיליון.
-  const isYahrzeitKey = (k: string) => /יארצייט|יורצייט|פטירה|יום השנה/.test(k);
-  const isBirthdayKey = (k: string) => k.includes('לידה');
-  const isImportantDateKey = (k: string) => isYahrzeitKey(k) || isBirthdayKey(k);
+  const getHebrewPickerValue = (key: string): HebrewDateValue => {
+    if (hebrewPickerValues[key]) return hebrewPickerValues[key];
+    const parsed = editedFields[key] ? parseCanonicalHebrewString(editedFields[key]) : null;
+    return parsed ? hdateToValue(parsed) : emptyHebrewDateValue();
+  };
 
-  const convertDateToHebrew = (gregStr: string, fieldKey: string) => {
-    try {
-      let d = 0, m = 0, y = 0;
-      // Try parsing as YYYY-MM-DD
-      const isoMatch = String(gregStr).match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-      if (isoMatch) {
-        y = parseInt(isoMatch[1], 10);
-        m = parseInt(isoMatch[2], 10) - 1;
-        d = parseInt(isoMatch[3], 10);
-      } else {
-        // Try parsing DD/MM/YYYY or DD.MM.YYYY or DD-MM-YYYY
-        const dmyMatch = String(gregStr).match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/);
-        if (dmyMatch) {
-          d = parseInt(dmyMatch[1], 10);
-          m = parseInt(dmyMatch[2], 10) - 1;
-          y = parseInt(dmyMatch[3], 10);
-          if (y < 100) {
-            y += y > 50 ? 1900 : 2000;
-          }
-        }
-      }
-
-      const isFutureOrValid = y >= 1900 && y <= 2100;
-      
-      if (isFutureOrValid && m >= 0 && m <= 11 && d > 0 && d <= 31) {
-        const h = new HDate(new Date(y, m, d));
-        let hebrewStr = h.render('he');
-        // Remove year if it's not a specific full date we want to keep years for,
-        // although for birthdays keeping the year is nice or optionally just the day/month
-        // Let's just keep the full string.
-        const targetKey = (fieldKey.includes('יארצייט') || fieldKey.includes('יורצייט')) ? 'יארצייט' : 'תאריך לידה עברי';
-        setEditedFields(prev => ({ ...prev, [targetKey]: hebrewStr }));
-        
-        // Show success logic or auto-save? Just updating the state is fine.
-        return;
-      }
-      alert('יש להזין תאריך בפורמט: DD/MM/YYYY או YYYY-MM-DD כדי להמיר.');
-    } catch {
-      alert('שגיאה בהמרת התאריך.');
+  // שומר שדה עברי + הלועזי המקביל לו יחד, לפי ערך שנבחר בבורר
+  const saveHebrewFieldPair = (key: string) => {
+    const value = getHebrewPickerValue(key);
+    const hdate = hebrewDateValueToHDate(value);
+    if (!hdate) {
+      alert('נא למלא יום, חודש ושנה עבריים תקינים');
+      return;
     }
+    const gregKey = gregorianPairFor(key);
+    setEditedFields(prev => ({
+      ...prev,
+      [key]: toCanonicalHebrewString(hdate),
+      [gregKey]: hebrewToGregorianCompanion(hdate),
+    }));
+  };
+
+  // שומר שדה לועזי + העברי המקביל לו יחד, לפי מה שהוקלד בשדה הלועזי
+  const saveGregorianFieldPair = (key: string) => {
+    const hdate = gregorianToHebrewCompanion(editedFields[key]);
+    if (!hdate) {
+      alert('נא להזין תאריך לועזי תקין');
+      return;
+    }
+    const hebKey = hebrewPairFor(key);
+    setEditedFields(prev => ({
+      ...prev,
+      [hebKey]: toCanonicalHebrewString(hdate),
+      [key]: hebrewToGregorianCompanion(hdate),
+    }));
+    setHebrewPickerValues(prev => ({ ...prev, [hebKey]: hdateToValue(hdate) }));
+  };
+
+  const addYahrzeit = () => {
+    const label = prompt('עבור מי היארצייט? (למשל: אב, אם, בעל, אישה)');
+    if (!label || !label.trim()) return;
+    const key = `יארצייט (${label.trim()})`;
+    if (editedFields[key] !== undefined) return;
+    setEditedFields(prev => ({ ...prev, [key]: '' }));
+  };
+
+  const toISOInputValue = (ddmmyyyy: string): string => {
+    const m = String(ddmmyyyy || '').match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+    if (!m) return '';
+    const [, d, mo, y] = m;
+    const yyyy = y.length === 2 ? `20${y}` : y;
+    return `${yyyy}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  };
+
+  const fromISOInputValue = (iso: string): string => {
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return '';
+    const [, y, mo, d] = m;
+    return `${d}/${mo}/${y}`;
   };
 
   const handleFieldSave = async () => {
@@ -96,7 +115,7 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
             }
 
             // Update personal details sheet for dates
-            if (field.includes('לידה') || field.includes('פטירה') || field.includes('יארצייט') || field.includes('יורצייט')) {
+            if (isImportantDateKey(field)) {
                 await apiPost('updatePersonalDate', { name, field, value });
             }
          }
@@ -340,11 +359,12 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
                   init[k] = (combined as any)[k] || '';
                 });
                 // Ensure common fields are at least suggested if missing
-                const common = ['טלפון', 'כתובת', 'תאריך לידה', 'תאריך לידה עברי', 'יארצייט', 'שם זוג', 'תפילין', 'מזוזות', 'פורים', 'פסח', 'ל"ג בעומר', 'שבועות', 'ראש השנה', 'סוכות', 'חנוכה', 'י"א ניסן'];
+                const common = ['טלפון', 'כתובת', 'תאריך לידה', 'תאריך לידה עברי', 'יארצייט', 'שם זוג', 'תפילין', 'מזוזות'];
                 common.forEach(c => {
                   if (init[c] === undefined) init[c] = '';
                 });
                 setEditedFields(init);
+                setHebrewPickerValues({});
                 setIsEditingFields(true);
               }}
               className="bg-[#C9A84C]/10 text-[#9B7A2F] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors hover:bg-[#C9A84C]/20"
@@ -408,13 +428,19 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
               </div>
               
               <div className="overflow-y-auto flex-1 pr-1 space-y-4 mb-5 custom-scrollbar">
-                {Object.keys(editedFields).map(key => (
+                {Object.keys(editedFields).map(key => {
+                  const isDateField = isImportantDateKey(key);
+                  const isHebrewField = isDateField && isHebrewStyleDateKey(key);
+                  const isGregorianField = isDateField && !isHebrewField;
+                  return (
                   <div key={key} className="flex flex-col group">
                     <div className="flex justify-between items-center mb-1">
-                      <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wide group-focus-within:text-[#C9A84C] transition-colors">{key}</label>
+                      <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wide group-focus-within:text-[#C9A84C] transition-colors">
+                        {key} {isDateField && (isYahrzeitKey(key) ? '🕯️' : '🎂')}
+                      </label>
                       {/* Only allow deleting non-standard fields in UI if they are empty */}
                       {!editedFields[key] && !['טלפון', 'כתובת'].includes(key) && (
-                        <button 
+                        <button
                           onClick={() => {
                             const next = { ...editedFields };
                             delete next[key];
@@ -424,31 +450,58 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
                         >מחק</button>
                       )}
                     </div>
-                    <div className="relative">
-                      <input 
+
+                    {isHebrewField ? (
+                      <div className="bg-[#FAF6EE] rounded-xl p-3 border-[1.5px] border-[#EDE6D6]">
+                        <HebrewDatePicker
+                          value={getHebrewPickerValue(key)}
+                          onChange={v => setHebrewPickerValues(prev => ({ ...prev, [key]: v }))}
+                        />
+                        <button
+                          onClick={() => saveHebrewFieldPair(key)}
+                          className="w-full mt-2 flex items-center justify-center gap-1.5 bg-[#0D1B2A] text-[#E8C97A] text-xs font-bold py-2 rounded-lg"
+                        >
+                          <RefreshCw size={13} /> שמור (עברי + לועזי יחושב אוטומטית)
+                        </button>
+                        {editedFields[key] && (
+                          <div className="text-[11px] text-gray-500 mt-2 text-center">
+                            נשמר כרגע: <b>{editedFields[key]}</b>
+                            {editedFields[gregorianPairFor(key)] && <> · לועזי: <b>{editedFields[gregorianPairFor(key)]}</b></>}
+                          </div>
+                        )}
+                      </div>
+                    ) : isGregorianField ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="date"
+                          value={toISOInputValue(editedFields[key] || '')}
+                          onChange={e => setEditedFields(prev => ({ ...prev, [key]: fromISOInputValue(e.target.value) }))}
+                          className="flex-1 border-[1.5px] border-[#EDE6D6] rounded-xl py-2.5 px-3 text-sm focus:border-[#C9A84C] focus:ring-1 focus:ring-[#C9A84C]/20 outline-none transition-all"
+                        />
+                        <button
+                          onClick={() => saveGregorianFieldPair(key)}
+                          title="חשב ושמור גם עברי"
+                          disabled={!editedFields[key]}
+                          className="shrink-0 flex items-center gap-1 bg-[#0D1B2A] text-[#E8C97A] text-xs font-bold px-3 rounded-lg disabled:opacity-40"
+                        >
+                          <RefreshCw size={13} /> עברי
+                        </button>
+                      </div>
+                    ) : (
+                      <input
                         type="text"
                         value={editedFields[key] || ''}
                         onChange={e => setEditedFields(prev => ({ ...prev, [key]: e.target.value }))}
-                        className={`w-full border-[1.5px] border-[#EDE6D6] rounded-xl py-2.5 text-sm focus:border-[#C9A84C] focus:ring-1 focus:ring-[#C9A84C]/20 outline-none transition-all pl-3 ${
-                           ((key.includes('לידה') || key.includes('יארצייט') || key.includes('יורצייט')) && !key.includes('עברי') && editedFields[key]) ? 'pr-9' : 'pr-3.5'
-                        }`}
+                        className="w-full border-[1.5px] border-[#EDE6D6] rounded-xl py-2.5 px-3.5 text-sm focus:border-[#C9A84C] focus:ring-1 focus:ring-[#C9A84C]/20 outline-none transition-all"
                         placeholder={`הזן ${key}...`}
                       />
-                      {((key.includes('לידה') || key.includes('יארצייט') || key.includes('יורצייט')) && !key.includes('עברי') && editedFields[key]) && (
-                        <button 
-                          onClick={() => convertDateToHebrew(editedFields[key], key)}
-                          title="המר לעברי"
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#C9A84C] bg-white p-1 rounded-md transition-colors"
-                        >
-                          <RefreshCw size={16} />
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </div>
-                ))}
-                
+                  );
+                })}
+
                 <div className="pt-2 border-t border-dashed border-gray-100 flex flex-col gap-2">
-                  <button 
+                  <button
                     onClick={() => {
                       const name = prompt('שם השדה החדש (למשל: יום הולדת, שם האישה...):');
                       if (name && !editedFields[name]) {
@@ -459,7 +512,13 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
                   >
                     + הוסף שדה חדש שלא מופיע
                   </button>
-                  <button 
+                  <button
+                    onClick={addYahrzeit}
+                    className="flex items-center gap-2 text-xs font-bold text-[#9B7A2F] py-2 w-full justify-center bg-[#EDE6D6]/30 rounded-xl hover:bg-[#EDE6D6]/50 transition-colors"
+                  >
+                    🕯️ + הוסף יארצייט נוסף
+                  </button>
+                  <button
                     onClick={() => setIsDateConverterOpen(true)}
                     className="flex items-center gap-2 text-xs font-bold text-[#0D1B2A] py-2 w-full justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
                   >

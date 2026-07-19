@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Plus, Check, X } from 'lucide-react';
+import { Plus, Check, X, ClipboardList } from 'lucide-react';
 import { format } from 'date-fns';
+import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL } from '../lib/tasks';
 
 export function EventsTab() {
   const { eventsData, updateEventsData, visibleDonors, crm, hk, failures } = useAppStore();
   const [filter, setFilter] = useState('all');
   const [isAddingMode, setIsAddingMode] = useState(false);
   const [attEventId, setAttEventId] = useState<string | null>(null);
+  const [tasksEventId, setTasksEventId] = useState<string | null>(null);
+  const [taskText, setTaskText] = useState('');
 
   const [evName, setEvName] = useState('');
   const [evType, setEvType] = useState('shabbat');
@@ -68,6 +71,35 @@ export function EventsTab() {
   };
 
   const currentAttEvent = eventsData.find((e: any) => e.id === attEventId);
+  const currentTasksEvent = eventsData.find((e: any) => e.id === tasksEventId);
+
+  const toggleEventTask = (idx: number) => {
+    if (!currentTasksEvent) return;
+    const nextTasks = [...(currentTasksEvent.tasks || [])];
+    nextTasks[idx] = { ...nextTasks[idx], done: !nextTasks[idx].done };
+    updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+  };
+
+  const addEventTask = () => {
+    if (!taskText.trim() || !currentTasksEvent) return;
+    const nextTasks = [...(currentTasksEvent.tasks || []), { text: taskText.trim(), done: false }];
+    updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+    setTaskText('');
+  };
+
+  const toggleEventInvitePerson = (idx: number, person: string) => {
+    if (!currentTasksEvent) return;
+    const nextTasks = [...(currentTasksEvent.tasks || [])];
+    nextTasks[idx] = toggleInvitePerson(nextTasks[idx], person);
+    updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+  };
+
+  const addEventInviteTask = () => {
+    if (!currentTasksEvent || donorNames.length === 0) return;
+    const nextTasks = [...(currentTasksEvent.tasks || []), createInviteTask(currentTasksEvent.name, donorNames)];
+    updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+  };
+
   const donorNames = Object.keys(visibleDonors).filter(n => {
     if (attSearch && !n.includes(attSearch)) return false;
     if (attCategory !== 'all') {
@@ -130,9 +162,22 @@ export function EventsTab() {
                         <div className="text-[11px] text-gray-500">{freqLabels[ev.freq] || ev.freq} {ev.time && `· ${ev.time}`}</div>
                       </div>
                     </div>
-                    <button onClick={() => openAttModal(ev)} className="bg-[#C9A84C]/10 text-[#9B7A2F] text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-transform flex items-center gap-1.5 shrink-0 whitespace-nowrap">
-                       <Check size={14}/> נוכחות
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => { setTasksEventId(ev.id); setAttCategory('all'); setAttSearch(''); }}
+                        className="relative bg-purple-50 text-purple-700 text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-transform flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <ClipboardList size={14}/> משימות
+                        {(ev.tasks || []).some((t: any) => !t.done) && (
+                          <span className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-[#C9A84C] text-[#0D1B2A] rounded-full text-[9px] font-bold flex items-center justify-center">
+                            {(ev.tasks || []).filter((t: any) => !t.done).length}
+                          </span>
+                        )}
+                      </button>
+                      <button onClick={() => openAttModal(ev)} className="bg-[#C9A84C]/10 text-[#9B7A2F] text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-transform flex items-center gap-1.5 whitespace-nowrap">
+                         <Check size={14}/> נוכחות
+                      </button>
+                    </div>
                  </div>
                  
                  <div className="bg-[#FAF6EE] p-2.5 flex justify-around">
@@ -285,6 +330,92 @@ export function EventsTab() {
              <button onClick={saveAttendance} className="w-full bg-gradient-to-br from-[#0D1B2A] to-[#1A2E45] text-white rounded-xl py-3.5 font-bold shadow-md shrink-0">
                שמור נוכחות ({Object.values(pendingAtt).filter(Boolean).length})
              </button>
+           </div>
+        </div>
+      )}
+
+      {/* Tasks Modal */}
+      {tasksEventId && currentTasksEvent && (
+        <div className="fixed inset-0 bg-black/60 z-[200] flex items-end justify-center p-0 md:p-4 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && setTasksEventId(null)}>
+           <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl p-5 pb-8 w-full max-w-[430px] max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+             <div className="flex justify-between items-start mb-4">
+               <h2 className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] flex items-center gap-2">📋 משימות — {currentTasksEvent.name}</h2>
+               <button onClick={() => setTasksEventId(null)} className="bg-gray-200/50 p-2 rounded-full text-gray-500 hover:bg-gray-200"><X size={16}/></button>
+             </div>
+
+             <div className="flex-1 overflow-y-auto pr-1 space-y-2 mb-3 custom-scrollbar">
+               {(currentTasksEvent.tasks || []).length === 0 && (
+                 <div className="text-sm text-gray-400 text-center bg-white rounded-xl p-4 border border-[#EDE6D6]">אין עדיין משימות לאירוע הזה</div>
+               )}
+               {(currentTasksEvent.tasks || []).map((t: any, i: number) => (
+                 t.kind === 'invite' ? (
+                   <div key={i} className="bg-white rounded-xl p-3 shadow-sm">
+                     <div className="flex items-center justify-between mb-2">
+                       <span className={`text-sm font-bold ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+                       <span className="text-[10px] text-gray-400 shrink-0">נותרו ~{inviteRemainingMinutes(t)} דק'</span>
+                     </div>
+                     <div className="flex flex-wrap gap-1.5">
+                       {(t.people || []).map((p: string) => {
+                         const isDone = (t.doneNames || []).includes(p);
+                         return (
+                           <button
+                             key={p}
+                             onClick={() => toggleEventInvitePerson(i, p)}
+                             className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${isDone ? 'bg-[#D1FAE5] border-[#10B981] text-[#065F46] line-through' : 'bg-[#FAF6EE] border-[#EDE6D6] text-[#0D1B2A]'}`}
+                           >
+                             {p}
+                           </button>
+                         );
+                       })}
+                     </div>
+                   </div>
+                 ) : (
+                   <div key={i} onClick={() => toggleEventTask(i)} className="bg-white rounded-xl p-3 shadow-sm flex items-center gap-3 cursor-pointer">
+                     <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
+                       {t.done && <Check size={12} className="text-white" />}
+                     </div>
+                     <span className={`text-sm ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+                   </div>
+                 )
+               ))}
+             </div>
+
+             <div className="flex gap-2 mb-4 shrink-0">
+               <input value={taskText} onChange={e => setTaskText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addEventTask()} type="text" className="flex-1 bg-white border border-[#EDE6D6] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A84C]" placeholder="משימה חדשה..." />
+               <button onClick={addEventTask} className="bg-[#0D1B2A] rounded-xl px-4 text-[#E8C97A] font-bold shadow-sm shrink-0">הוסף</button>
+             </div>
+
+             <div className="border-t border-dashed border-[#EDE6D6] pt-3 shrink-0">
+               <div className="text-[11px] font-bold text-gray-500 uppercase mb-2">או צור משימת הזמנה (📞 {MINUTES_PER_CALL} דק׳ לאדם) לפי מעגל קרבה:</div>
+               <div className="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar">
+                 {[
+                   { id: 'all', label: 'הכל' },
+                   { id: 'close', label: '⭐ קרוב' },
+                   { id: 'approach', label: '🔄 מתקרב' },
+                   { id: 'third', label: '⭕ מ. שלישי' },
+                   { id: 'target', label: '🎯 להקרב' },
+                 ].map(c => (
+                   <button
+                     key={c.id}
+                     onClick={() => setAttCategory(c.id)}
+                     className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium border-[1.5px] transition-colors ${
+                       attCategory === c.id
+                         ? 'bg-[#0D1B2A] border-[#0D1B2A] text-[#C9A84C]'
+                         : 'bg-white border-[#EDE6D6] text-gray-500'
+                     }`}
+                   >
+                     {c.label}
+                   </button>
+                 ))}
+               </div>
+               <button
+                 onClick={addEventInviteTask}
+                 disabled={donorNames.length === 0}
+                 className="w-full flex items-center justify-center gap-1.5 bg-purple-50 text-purple-700 text-sm font-bold py-2.5 rounded-xl disabled:opacity-40"
+               >
+                 <ClipboardList size={14} /> הוסף משימת הזמנה ל-{donorNames.length} אנשים (≈{donorNames.length * MINUTES_PER_CALL} דק׳)
+               </button>
+             </div>
            </div>
         </div>
       )}

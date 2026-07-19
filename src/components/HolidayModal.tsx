@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { createHolidayDoc } from '../lib/api';
-import { X, Check, MessageSquare, FileText, ExternalLink, Loader2, Download } from 'lucide-react';
+import { X, Check, MessageSquare, FileText, ExternalLink, Loader2, Download, ClipboardList } from 'lucide-react';
+import { createInviteTask, inviteRemainingMinutes, toggleInvitePerson, MINUTES_PER_CALL } from '../lib/tasks';
 
 export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () => void }) {
   const { holidayExtras, updateHolidayExtras, visibleDonors, crm, hk, failures } = useAppStore();
@@ -368,12 +369,39 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
           </div>
           <div className="space-y-2 mb-3">
             {extra.tasks?.length > 0 ? extra.tasks.map((t: any, i: number) => (
-              <div key={i} onClick={() => toggleTask(i)} className="bg-white rounded-xl p-3 shadow-sm flex items-center gap-3 cursor-pointer">
-                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
-                  {t.done && <Check size={12} className="text-white" />}
+              t.kind === 'invite' ? (
+                <div key={i} className="bg-white rounded-xl p-3 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-sm font-bold ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+                    <span className="text-[10px] text-gray-400 shrink-0">נותרו ~{inviteRemainingMinutes(t)} דק'</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(t.people || []).map((p: string) => {
+                      const isDone = (t.doneNames || []).includes(p);
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => {
+                            const nextTasks = [...extra.tasks];
+                            nextTasks[i] = toggleInvitePerson(t, p);
+                            updateHolidayExtras(id, { tasks: nextTasks });
+                          }}
+                          className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${isDone ? 'bg-[#D1FAE5] border-[#10B981] text-[#065F46] line-through' : 'bg-[#FAF6EE] border-[#EDE6D6] text-[#0D1B2A]'}`}
+                        >
+                          {p}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <span className={`text-sm ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
-              </div>
+              ) : (
+                <div key={i} onClick={() => toggleTask(i)} className="bg-white rounded-xl p-3 shadow-sm flex items-center gap-3 cursor-pointer">
+                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
+                    {t.done && <Check size={12} className="text-white" />}
+                  </div>
+                  <span className={`text-sm ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+                </div>
+              )
             )) : null}
           </div>
           <div className="flex gap-2">
@@ -400,7 +428,20 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
                 placeholder="הכנס כאן את נוסח ההזמנה..."
               />
               
-              <div className="text-[11px] font-bold text-gray-500 uppercase mb-2">שלח ל ({invitees.length}):</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[11px] font-bold text-gray-500 uppercase">שלח ל ({invitees.length}):</div>
+                <button
+                  onClick={() => {
+                    const nextTasks = [...(extra.tasks || []), createInviteTask(holiday.name, invitees.map((d: any) => d.name))];
+                    updateHolidayExtras(id, { tasks: nextTasks });
+                    alert(`נוספה משימה: הזמנת ${invitees.length} אנשים (≈ ${invitees.length * MINUTES_PER_CALL} דקות שיחות טלפון). אפשר לעקוב אחריה בכרטיסיית "משימות" ⬅ "משימות חג".`);
+                  }}
+                  disabled={invitees.length === 0}
+                  className="flex items-center gap-1.5 text-[11px] font-bold text-[#9B7A2F] bg-[#C9A84C]/10 px-2.5 py-1 rounded-lg hover:bg-[#C9A84C]/20 transition-colors disabled:opacity-40"
+                >
+                  <ClipboardList size={12} /> שמור כמשימת הזמנה
+                </button>
+              </div>
               <div className="flex gap-2 overflow-x-auto pb-2 mb-3 no-scrollbar shrink-0">
                 {[
                   { id: 'all', label: 'שורשי מוקדי' },

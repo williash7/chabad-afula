@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
 import { X, ArrowDownUp, CalendarDays } from 'lucide-react';
+import { HebrewDatePicker, emptyHebrewDateValue, type HebrewDateValue } from './HebrewDatePicker';
 
 export function DateConverterModal({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<'g2h' | 'h2g'>('g2h');
   const [gDate, setGDate] = useState('');
-  const [hDateParams, setHDateParams] = useState({ y: '', m: 'Nisan', d: '' });
-  
+  const [hDateParams, setHDateParams] = useState<HebrewDateValue>(emptyHebrewDateValue());
+
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-
-  const months = ['Nisan', 'Iyyar', 'Sivan', 'Tamuz', 'Av', 'Elul', 'Tishrei', 'Cheshvan', 'Kislev', 'Tevet', 'Shvat', 'Adar 1', 'Adar 2'];
-  const heMonths = ['ניסן', 'אייר', 'סיוון', 'תמוז', 'אב', 'אלול', 'תשרי', 'חשוון', 'כסלו', 'טבת', 'שבט', 'אדר א\'', 'אדר ב\''];
 
   const convert = async () => {
     setLoading(true);
@@ -74,38 +72,7 @@ export function DateConverterModal({ onClose }: { onClose: () => void }) {
               />
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">יום</label>
-                <input 
-                  type="number" min="1" max="30" placeholder="1-30"
-                  value={hDateParams.d} 
-                  onChange={e => setHDateParams(prev => ({...prev, d: e.target.value}))}
-                  className="w-full border-2 border-[#EDE6D6] rounded-xl p-3 focus:border-[#C9A84C] outline-none text-center"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">חודש</label>
-                <select 
-                  value={hDateParams.m} 
-                  onChange={e => setHDateParams(prev => ({...prev, m: e.target.value}))}
-                  className="w-full border-2 border-[#EDE6D6] rounded-xl p-3 focus:border-[#C9A84C] outline-none bg-white text-center"
-                >
-                  {months.map((m, i) => (
-                    <option key={m} value={m}>{heMonths[i]}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">שנה</label>
-                <input 
-                  type="number" min="5700" placeholder="e.g. 5786"
-                  value={hDateParams.y} 
-                  onChange={e => setHDateParams(prev => ({...prev, y: e.target.value}))}
-                  className="w-full border-2 border-[#EDE6D6] rounded-xl p-3 focus:border-[#C9A84C] outline-none text-center"
-                />
-              </div>
-            </div>
+            <HebrewDatePicker value={hDateParams} onChange={setHDateParams} />
           )}
         </div>
 

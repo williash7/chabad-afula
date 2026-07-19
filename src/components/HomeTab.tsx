@@ -1,34 +1,21 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Plus, Users, Calendar, PieChart, Info, AlertTriangle, CheckCircle, ChevronLeft, Pencil, X, CalendarDays, MessageSquare } from 'lucide-react';
+import { Plus, Users, Calendar, PieChart, Info, AlertTriangle, CheckCircle, ChevronLeft, Pencil, X, CalendarDays, MessageSquare, ClipboardList } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
 import { HolidayModal } from './HolidayModal';
 import { DateConverterModal } from './DateConverterModal';
 import { ThankYouModal } from './ThankYouModal';
-import { HDate } from '@hebcal/core';
-import { format } from 'date-fns';
 import { getCustomHols } from '../lib/api';
-import { findGregorianBirthday, findHebrewBirthday, findYahrzeitEntries } from '../lib/donorDates';
+import { computePersonalDateEvents } from '../lib/personalDates';
 
 export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => void, onDonationClick: () => void }) {
-  const { summary, donations, failures, rebbeDate, crm, visibleDonors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras, refresh } = useAppStore();
+  const { summary, donations, failures, rebbeDate, crm, visibleDonors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras, eventsData } = useAppStore();
   const [selectedDonor, setSelectedDonor] = useState<string | null>(null);
   const [selectedHoliday, setSelectedHoliday] = useState<any | null>(null);
   const [isRebbeEditOpen, setIsRebbeEditOpen] = useState(false);
   const [isDateConverterOpen, setIsDateConverterOpen] = useState(false);
-  const [isAllEventsOpen, setIsAllEventsOpen] = useState(false);
   const [selectedMethodForDetails, setSelectedMethodForDetails] = useState<string | null>(null);
   const [thankYouInfo, setThankYouInfo] = useState<{name: string, amount: number, phone: string} | null>(null);
-  // מפתח: "שם|טלפון" או "שם|אישית" → timestamp של תיעוד מהיר אחרון, כדי להראות "✓ נרשם" מיידית
-  const [quickLogged, setQuickLogged] = useState<Record<string, number>>({});
-
-  const handleQuickLog = async (donorName: string, meetType: 'טלפון' | 'אישית') => {
-    setQuickLogged(prev => ({ ...prev, [`${donorName}|${meetType}`]: Date.now() }));
-    const { apiPost } = await import('../lib/api');
-    const dateStr = new Date().toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    await apiPost('addMeeting', { name: donorName, date: dateStr, meetType, purpose: '', notes: '' });
-    refresh();
-  };
 
   const handleRebbeSave = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -38,135 +25,23 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
     setIsRebbeEditOpen(false);
   };
 
-  // "ליצור קשר עכשיו" — מבוסס על התשתית הקיימת: מעגלי קרבה + דגל "להקרב" (CRM),
-  // יומן מפגשים (donations/meetings המשותף), ותזכורות ימי הולדת/יארצייט.
-  // לא בונה מודל מידע כפול — רק ממיין ומדרג את מה שכבר קיים לפי דחיפות.
-  const { contactFocus, contactFocusAll } = React.useMemo(() => {
-    const today = new Date();
-    today.setHours(0,0,0,0);
-
-    const cleanHeStr = (str: string) =>
-      String(str).replace(/[֑-ׇ‎‏]/g, '').replace(/[^א-ת0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-    const nextYearHebrew = new Map<string, number>();
-    for (let i = 0; i < 400; i++) {
-      const d = new HDate(new Date(today.getTime() + i * 86400000));
-      const gem = d.renderGematriya ? d.renderGematriya() : d.render('he');
-      let partsGem = gem.split(' '); partsGem.pop();
-      let keyGem = cleanHeStr(partsGem.join(' '));
-      const pGem = keyGem.split(' ');
-      if (pGem.length > 1 && pGem[1].startsWith('ב') && pGem[1].length > 1) keyGem = pGem[0] + ' ' + pGem[1].substring(1);
-      if (!nextYearHebrew.has(keyGem)) nextYearHebrew.set(keyGem, i);
-      const numHe = d.render('he');
-      let partsNum = numHe.split(',');
-      let keyNum = cleanHeStr(partsNum[0]);
-      const pNum = keyNum.split(' ');
-      if (pNum.length > 1 && pNum[1].startsWith('ב') && pNum[1].length > 1) keyNum = pNum[0] + ' ' + pNum[1].substring(1);
-      if (!nextYearHebrew.has(keyNum)) nextYearHebrew.set(keyNum, i);
-    }
-    const checkHebrewDateMatch = (bdayStr: string) => {
-      const clean = cleanHeStr(bdayStr);
-      for (const k of nextYearHebrew.keys()) {
-        if (clean === k || clean.startsWith(k + ' ') || k === clean + ' ' || clean.includes(' ' + k + ' ') || clean.endsWith(' ' + k)) return k;
-      }
-      return null;
-    };
-
-    // תאריך המפגש (לא תרומה!) האחרון שתועד לכל תורם — מהיומן המשותף
-    // donations/meetings שכבר קיים (ראה ReportsTab: amount===0 = רשומת מפגש).
-    const lastMeetingByName = new Map<string, Date>();
-    (donations as any[]).forEach(d => {
-      if ((d.amount || 0) !== 0 || !d.name) return;
-      const dateStr = d.date || d.meetDate;
-      if (!dateStr) return;
-      const parsed = new Date(String(dateStr).split('/').reverse().join('-'));
-      if (isNaN(parsed.getTime())) return;
-      const prev = lastMeetingByName.get(d.name);
-      if (!prev || parsed > prev) lastMeetingByName.set(d.name, parsed);
+  // תקציר משימות לדשבורד: כמה משימות חג/אירוע פתוחות + כמה ימי הולדת/יארצייט
+  // מגיעים השבוע — בלי לבנות מודל נתונים כפול, רק סופר את מה שכבר קיים
+  // (holidayExtras.tasks, eventsData[].tasks, ותאריכים אישיים מחושבים).
+  const tasksSummary = React.useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let openHolidayTasks = 0;
+    const holidayIds = new Set<string>();
+    holidays.forEach(h => holidayIds.add(h.hebrew || h.title));
+    getCustomHols().forEach((c: any) => holidayIds.add(c.name));
+    holidayIds.forEach(id => {
+      openHolidayTasks += (holidayExtras[id]?.tasks || []).filter((t: any) => !t.done).length;
     });
-
-    const circleLabel: Record<string, string> = { close: '⭐ קרוב', approach: '🔄 מתקרב', third: '⭕ מעגל שלישי' };
-    const circleThreshold: Record<string, number> = { close: 14, approach: 30, third: 60 };
-
-    const dateEvents: any[] = [];
-    const overdueEvents: any[] = [];
-
-    Object.keys(visibleDonors).forEach(name => {
-      const donor = visibleDonors[name];
-      const combinedForDates = { ...(donor as any), ...(crm[name]?.customFields || {}) };
-      const hBday = findHebrewBirthday(combinedForDates);
-      const gBday = findGregorianBirthday(combinedForDates);
-      const yahrzeitEntries = findYahrzeitEntries(combinedForDates);
-
-      let hasDateEvent = false;
-      if (hBday) {
-        const matchKey = checkHebrewDateMatch(hBday);
-        if (matchKey && nextYearHebrew.has(matchKey)) {
-          const idx = nextYearHebrew.get(matchKey)!;
-          dateEvents.push({ name, msg: 'יום הולדת עברי ' + (idx === 0 ? 'היום' : `בעוד ${idx} ימים`), icon: '🎂', dist: idx });
-          hasDateEvent = true;
-        }
-      }
-      yahrzeitEntries.forEach(({ key, value }) => {
-        const matchKey = checkHebrewDateMatch(value);
-        if (matchKey && nextYearHebrew.has(matchKey)) {
-          const idx = nextYearHebrew.get(matchKey)!;
-          const label = /^(יארצייט|יורצייט|יום השנה)$/.test(key) ? 'יארצייט' : key;
-          dateEvents.push({ name, msg: label + ' ' + (idx === 0 ? 'היום' : `בעוד ${idx} ימים`), icon: '🕯️', dist: idx });
-          hasDateEvent = true;
-        }
-      });
-      if (!hasDateEvent && gBday) {
-        const gStr = String(gBday);
-        let d = 0, m = 0;
-        const isoMatch = gStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-        if (isoMatch) { m = parseInt(isoMatch[2]); d = parseInt(isoMatch[3]); }
-        else { const match = gStr.match(/(\d{1,2})[\/\.-](\d{1,2})/); if (match) { d = parseInt(match[1]); m = parseInt(match[2]); } }
-        if (d > 0 && m > 0 && d <= 31 && m <= 12) {
-          const dateThisYear = new Date(today.getFullYear(), m - 1, d);
-          if (dateThisYear < today) dateThisYear.setFullYear(today.getFullYear() + 1);
-          const realDays = Math.ceil((dateThisYear.getTime() - today.getTime()) / 86400000);
-          if (realDays >= 0) dateEvents.push({ name, msg: 'יום הולדת ' + (realDays === 0 ? 'היום' : `בעוד ${realDays} ימים`), icon: '🎈', dist: realDays });
-        }
-      }
-
-      // הליבה של הבקשה: מעגל קרבה + זמן שחלף מהמפגש האחרון
-      const circle = crm[name]?.circle;
-      const isTarget = !!crm[name]?.target;
-      if ((circle && circle !== 'far') || isTarget) {
-        const threshold = circle && circleThreshold[circle] ? circleThreshold[circle] : 30;
-        const lastMeet = lastMeetingByName.get(name);
-        const daysSince = lastMeet ? Math.floor((today.getTime() - lastMeet.getTime()) / 86400000) : null;
-        if (daysSince === null || daysSince > threshold) {
-          const circleTxt = circle && circleLabel[circle] ? circleLabel[circle] : (isTarget ? '🎯 מסומן להקרב' : '');
-          const msg = daysSince === null
-            ? `לא תועד קשר עדיין${circleTxt ? ' · ' + circleTxt : ''}`
-            : `${daysSince} ימים בלי יצירת קשר${circleTxt ? ' · ' + circleTxt : ''}`;
-          overdueEvents.push({
-            name, msg,
-            icon: circle === 'close' ? '⭐' : circle === 'approach' ? '🔄' : circle === 'third' ? '⭕' : '🎯',
-            overdueBy: daysSince === null ? Infinity : daysSince - threshold,
-            circleWeight: circle === 'close' ? 0 : circle === 'approach' ? 1 : circle === 'third' ? 2 : 3,
-          });
-        }
-      }
-    });
-
-    dateEvents.sort((a, b) => a.dist - b.dist);
-    overdueEvents.sort((a, b) => a.circleWeight - b.circleWeight || b.overdueBy - a.overdueBy);
-
-    const contactFocusAll = [
-      ...overdueEvents.map(e => ({ ...e, kind: 'overdue' as const })),
-      ...dateEvents.filter(e => e.dist <= 30).map(e => ({ ...e, kind: 'date' as const })),
-    ];
-
-    const urgency = (e: any) => e.kind === 'date' ? e.dist : Math.max(0, 60 - (e.overdueBy === Infinity ? 999 : e.overdueBy));
-    const contactFocus = [
-      ...dateEvents.filter(e => e.dist <= 7).map(e => ({ ...e, kind: 'date' as const })),
-      ...overdueEvents.map(e => ({ ...e, kind: 'overdue' as const })),
-    ].sort((a, b) => urgency(a) - urgency(b));
-
-    return { contactFocus, contactFocusAll };
-  }, [visibleDonors, crm, donations]);
+    let openEventTasks = 0;
+    eventsData.forEach((e: any) => { openEventTasks += (e.tasks || []).filter((t: any) => !t.done).length; });
+    const personalDates = computePersonalDateEvents(visibleDonors, crm, today).filter(e => e.dist <= 7);
+    return { openHolidayTasks, openEventTasks, personalDates };
+  }, [holidays, holidayExtras, eventsData, visibleDonors, crm]);
 
   const recent = [...donations].sort((a, b) => {
     const aDate = a.date.split('/').reverse().join('-');
@@ -174,77 +49,30 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
     return new Date(bDate).getTime() - new Date(aDate).getTime();
   }).slice(0, 5);
 
-  const currentHMonthCode = new HDate().getMonthName();
-  const monthMap: Record<string, string> = {
-    'Nisan': 'ניסן', 'Iyyar': 'אייר', 'Sivan': 'סיוון', 'Tamuz': 'תמוז', 'Av': 'אב', 'Elul': 'אלול',
-    'Tishrei': 'תשרי', 'Cheshvan': 'חשוון', 'Kislev': 'כסלו', 'Tevet': 'טבת', "Sh'vat": 'שבט',
-    'Adar I': "אדר א'", 'Adar II': "אדר ב'", 'Adar': 'אדר'
-  };
-  const currentHbMonth = monthMap[currentHMonthCode] || '';
-
   // ── Render helpers ──────────────────────────────────────────────────────────
 
-  // כרטיס-שורה עם שני כפתורי תיעוד מהיר (טלפון / מפגש) — משותף לכרטיס הראשי ולמודל "הצג הכל"
-  const renderQuickLogButtons = (donorName: string, compact = false) => {
-    const callKey = `${donorName}|טלפון`;
-    const meetKey = `${donorName}|אישית`;
-    const calledRecently = !!quickLogged[callKey] && Date.now() - quickLogged[callKey] < 60000;
-    const metRecently = !!quickLogged[meetKey] && Date.now() - quickLogged[meetKey] < 60000;
-    const size = compact ? 'text-[11px] py-1.5' : 'text-xs py-1.5';
+  const renderTasksSummary = () => {
+    const total = tasksSummary.openHolidayTasks + tasksSummary.openEventTasks + tasksSummary.personalDates.length;
     return (
-      <div className="flex gap-2">
-        <button
-          onClick={() => handleQuickLog(donorName, 'טלפון')}
-          disabled={calledRecently}
-          className={`flex-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform disabled:opacity-60 ${size}`}
-        >
-          {calledRecently ? '✓ נרשם' : '📞 שוחחתי'}
-        </button>
-        <button
-          onClick={() => handleQuickLog(donorName, 'אישית')}
-          disabled={metRecently}
-          className={`flex-1 bg-green-50 text-green-700 border border-green-200 rounded-lg font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform disabled:opacity-60 ${size}`}
-        >
-          {metRecently ? '✓ נרשם' : '🤝 נפגשנו'}
-        </button>
+      <div
+        onClick={() => setTab('tasks')}
+        className="bg-white rounded-2xl p-4 shadow-sm border border-[#EDE6D6] cursor-pointer active:scale-[0.98] transition-transform flex items-center justify-between gap-3"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="text-2xl shrink-0">📋</span>
+          <div className="min-w-0">
+            <div className="font-['Frank_Ruhl_Libre'] text-base font-bold text-[#0D1B2A]">
+              {total === 0 ? 'אין משימות פתוחות כרגע' : `${total} משימות פתוחות`}
+            </div>
+            <div className="text-[11px] text-gray-500 mt-0.5 truncate">
+              {tasksSummary.openHolidayTasks} חגים · {tasksSummary.openEventTasks} אירועים · {tasksSummary.personalDates.length} ימי הולדת/יארצייט השבוע
+            </div>
+          </div>
+        </div>
+        <ChevronLeft size={16} className="text-gray-300 shrink-0" />
       </div>
     );
   };
-
-  const renderContactFocus = () => (
-    <div>
-      <div className="flex justify-between items-center mb-3">
-        <h2 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A] flex items-center gap-2">
-          <span className="text-xl">🤝</span> ליצור קשר עכשיו
-        </h2>
-        {contactFocusAll.length > 0 && (
-          <button onClick={() => setIsAllEventsOpen(true)} className="text-xs text-[#9B7A2F] font-bold">
-            הצג הכל ({contactFocusAll.length}) &gt;
-          </button>
-        )}
-      </div>
-      {contactFocus.length === 0 ? (
-        <div className="bg-white rounded-xl p-6 text-center text-gray-500 shadow-sm text-sm border border-[#EDE6D6]">
-          ✅ אין כרגע אנשי קשר שממתינים ליצירת קשר. עבודה מצוינת!
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {contactFocus.slice(0, 8).map((c: any, i: number) => (
-            <div key={i} className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
-              <div className="flex items-center gap-3 mb-2.5 cursor-pointer" onClick={() => setSelectedDonor(c.name)}>
-                <span className="text-xl shrink-0">{c.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-[#0D1B2A] truncate">{c.name}</div>
-                  <div className="text-xs text-gray-600 mt-0.5">{c.msg}</div>
-                </div>
-              </div>
-              {renderQuickLogButtons(c.name)}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 
   const renderShabbatCard = () => {
     if (!shabbat?.items) return null;
@@ -442,8 +270,8 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
         <button onClick={() => setTab('donors')} className="bg-white rounded-xl p-3 flex flex-col items-center gap-1 shadow-sm active:scale-95 transition-transform">
           <Users size={24} className="text-[#0D1B2A]" /><span className="text-[10px] font-semibold text-[#0D1B2A]">אנשי קשר</span>
         </button>
-        <button onClick={() => setTab('calendar')} className="bg-white rounded-xl p-3 flex flex-col items-center gap-1 shadow-sm active:scale-95 transition-transform">
-          <Calendar size={24} className="text-[#0D1B2A]" /><span className="text-[10px] font-semibold text-[#0D1B2A]">חגים</span>
+        <button onClick={() => setTab('tasks')} className="bg-white rounded-xl p-3 flex flex-col items-center gap-1 shadow-sm active:scale-95 transition-transform">
+          <ClipboardList size={24} className="text-[#0D1B2A]" /><span className="text-[10px] font-semibold text-[#0D1B2A]">משימות</span>
         </button>
         <button onClick={() => setTab('reports')} className="bg-white rounded-xl p-3 flex flex-col items-center gap-1 shadow-sm active:scale-95 transition-transform">
           <PieChart size={24} className="text-[#0D1B2A]" /><span className="text-[10px] font-semibold text-[#0D1B2A]">דוחות</span>
@@ -592,22 +420,22 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
 
       {/* ── Mobile layout ── */}
       <div className="p-4 space-y-4 md:hidden">
-        {renderContactFocus()}
         {renderShabbatCard()}
         {renderRebbeCard()}
-        {renderHolidaysAndTasks()}
-        {renderQuickActions()}
+        {renderTasksSummary()}
         {renderHeroSummary()}
         {renderStatsRow()}
+        {renderQuickActions()}
+        {renderHolidaysAndTasks()}
         {renderFailures()}
         {renderRecent()}
       </div>
 
       {/* ── Desktop layout — two columns ── */}
       <div className="hidden md:grid md:grid-cols-[1fr_380px] md:gap-6 md:p-6 md:items-start">
-        {/* Left: primary — יצירת קשר קודם, תרומות אחר כך */}
+        {/* Left: primary — מידע ופעולות */}
         <div className="space-y-5">
-          {renderContactFocus()}
+          {renderTasksSummary()}
           {renderHeroSummary()}
           {renderStatsRow()}
           {renderFailures()}
@@ -643,32 +471,6 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
       )}
 
       {renderMethodModal()}
-
-      {isAllEventsOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[200] flex items-end md:items-center justify-center p-0 md:p-4" onClick={(e) => e.target === e.currentTarget && setIsAllEventsOpen(false)}>
-          <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl p-5 pb-10 md:pb-5 w-full max-w-[430px] md:max-w-2xl max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
-            <div className="flex justify-between items-center mb-5 sticky top-0 bg-[#FAF6EE] py-2 z-10">
-              <h2 className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] flex items-center gap-2"><span className="text-2xl">🤝</span> כל אנשי הקשר לטיפול</h2>
-              <button onClick={() => setIsAllEventsOpen(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={16} /></button>
-            </div>
-            <div className="md:grid md:grid-cols-2 md:gap-3 space-y-3 md:space-y-0">
-              {contactFocusAll.map((c: any, i: number) => (
-                <div key={i} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
-                  <div className="flex items-center gap-3 mb-2.5 cursor-pointer" onClick={() => setSelectedDonor(c.name)}>
-                    <span className="text-2xl">{c.icon}</span>
-                    <div className="min-w-0">
-                      <div className="font-bold text-[#0D1B2A] text-sm">{c.name}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{c.msg}</div>
-                    </div>
-                  </div>
-                  {renderQuickLogButtons(c.name, true)}
-                </div>
-              ))}
-              {contactFocusAll.length === 0 && <div className="text-center py-6 text-gray-500 text-sm md:col-span-2">אין כרגע אנשי קשר שממתינים ליצירת קשר.</div>}
-            </div>
-          </div>
-        </div>
-      )}
 
       {selectedDonor && <ProfileModal name={selectedDonor} onClose={() => setSelectedDonor(null)} />}
       {selectedHoliday && <HolidayModal holiday={selectedHoliday} onClose={() => setSelectedHoliday(null)} />}

@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Search, RefreshCw, Plus, Users, Map, Navigation, MapPin, X, Link2 } from 'lucide-react';
+import { Search, RefreshCw, Plus, Users, Map, Navigation, MapPin, X, Link2, PhoneCall } from 'lucide-react';
 import { Donor } from '../types';
 import { ProfileModal } from './ProfileModal';
 import { DonorsMap } from './DonorsMap';
 import { MergeContactsModal } from './MergeContactsModal';
+import { QuickLogButtons } from './QuickLogButtons';
 import { findGregorianBirthday, findHebrewBirthday, findYahrzeitEntries } from '../lib/donorDates';
+import { computeOverdueContacts } from '../lib/contactFocus';
 
 export function DonorsTab() {
-  const { donors, visibleDonors, hk, failures, crm, refresh, updateCrm, nameMerges } = useAppStore();
+  const { donors, visibleDonors, hk, failures, crm, donations, refresh, updateCrm, nameMerges } = useAppStore();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('total');
@@ -18,6 +20,14 @@ export function DonorsTab() {
   const [newContactName, setNewContactName] = useState('');
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isMergeOpen, setIsMergeOpen] = useState(false);
+  const [isContactFocusOpen, setIsContactFocusOpen] = useState(false);
+
+  // מי לא יצרנו איתו קשר לאחרונה, לפי מעגל קרבה + זמן שחלף מהמפגש האחרון
+  // (הועבר מהדשבורד לכאן — זה המקום הטבעי לרשימת "למי ליצור קשר")
+  const overdueContacts = React.useMemo(
+    () => computeOverdueContacts(visibleDonors, crm, donations, new Date()),
+    [visibleDonors, crm, donations]
+  );
 
   const submitNewContact = async () => {
     const name = newContactName.trim();
@@ -125,6 +135,18 @@ export function DonorsTab() {
           <div className="text-[11px] text-white/45 mt-[1px]">{list.length} רשומות</div>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => setIsContactFocusOpen(true)}
+            className="relative w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0 hover:bg-white/20 transition-colors"
+            title="למי ליצור קשר"
+          >
+            <PhoneCall size={16} />
+            {overdueContacts.length > 0 && (
+              <span className="absolute -top-0.5 -left-0.5 w-4 h-4 bg-[#C9A84C] text-[#0D1B2A] rounded-full text-[9px] font-bold flex items-center justify-center">
+                {overdueContacts.length > 9 ? '9+' : overdueContacts.length}
+              </span>
+            )}
+          </button>
           <button
             onClick={() => setIsMapOpen(true)}
             className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0 hover:bg-white/20 transition-colors"
@@ -487,6 +509,47 @@ export function DonorsTab() {
       )}
 
       {isMergeOpen && <MergeContactsModal onClose={() => setIsMergeOpen(false)} />}
+
+      {isContactFocusOpen && (
+        <div className="fixed inset-0 bg-black/50 z-[200] flex items-end md:items-center justify-center p-0 md:p-4 backdrop-blur-sm" onClick={e => e.target === e.currentTarget && setIsContactFocusOpen(false)}>
+          <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl w-full max-w-[430px] md:max-w-xl max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
+            <div className="sticky top-0 bg-[#0D1B2A] px-5 py-4 flex items-center justify-between rounded-t-3xl">
+              <div className="flex items-center gap-3">
+                <PhoneCall size={20} className="text-[#C9A84C]" />
+                <div>
+                  <div className="font-['Frank_Ruhl_Libre'] text-base font-bold text-[#C9A84C]">למי ליצור קשר</div>
+                  <div className="text-[11px] text-white/40">לפי מעגל קרבה וזמן שחלף מהמפגש האחרון</div>
+                </div>
+              </div>
+              <button onClick={() => setIsContactFocusOpen(false)} className="p-2 bg-white/10 rounded-full text-white/70">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5">
+              {overdueContacts.length === 0 ? (
+                <div className="bg-white rounded-xl p-6 text-center text-gray-500 shadow-sm text-sm border border-[#EDE6D6]">
+                  ✅ אין כרגע אנשי קשר שממתינים ליצירת קשר. עבודה מצוינת!
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {overdueContacts.map((c, i) => (
+                    <div key={i} className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
+                      <div className="flex items-center gap-3 mb-2.5 cursor-pointer" onClick={() => { setSelectedDonor(c.name); setIsContactFocusOpen(false); }}>
+                        <span className="text-xl shrink-0">{c.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-[#0D1B2A] truncate">{c.name}</div>
+                          <div className="text-xs text-gray-600 mt-0.5">{c.msg}</div>
+                        </div>
+                      </div>
+                      <QuickLogButtons donorName={c.name} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
