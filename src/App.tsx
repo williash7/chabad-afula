@@ -9,6 +9,7 @@ import { CalendarTab } from './components/CalendarTab';
 import { EventsTab } from './components/EventsTab';
 import { ReportsTab } from './components/ReportsTab';
 import { PosterTab } from './components/PosterTab';
+import { SettingsTab } from './components/SettingsTab';
 import { DonationModal } from './components/DonationModal';
 import { Plus } from 'lucide-react';
 
@@ -42,6 +43,7 @@ function AppContent() {
           {activeTab === 'calendar' && <CalendarTab />}
           {activeTab === 'reports' && <ReportsTab />}
           {activeTab === 'poster' && <PosterTab onClose={() => setActiveTab('home')} />}
+          {activeTab === 'settings' && <SettingsTab />}
         </main>
       </div>
 

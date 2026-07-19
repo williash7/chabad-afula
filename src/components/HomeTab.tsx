@@ -11,7 +11,7 @@ import { getCustomHols } from '../lib/api';
 import { findGregorianBirthday, findHebrewBirthday, findYahrzeitEntries } from '../lib/donorDates';
 
 export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => void, onDonationClick: () => void }) {
-  const { summary, donations, failures, rebbeDate, crm, donors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras, refresh } = useAppStore();
+  const { summary, donations, failures, rebbeDate, crm, visibleDonors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras, refresh } = useAppStore();
   const [selectedDonor, setSelectedDonor] = useState<string | null>(null);
   const [selectedHoliday, setSelectedHoliday] = useState<any | null>(null);
   const [isRebbeEditOpen, setIsRebbeEditOpen] = useState(false);
@@ -90,8 +90,8 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
     const dateEvents: any[] = [];
     const overdueEvents: any[] = [];
 
-    Object.keys(donors).forEach(name => {
-      const donor = donors[name];
+    Object.keys(visibleDonors).forEach(name => {
+      const donor = visibleDonors[name];
       const combinedForDates = { ...(donor as any), ...(crm[name]?.customFields || {}) };
       const hBday = findHebrewBirthday(combinedForDates);
       const gBday = findGregorianBirthday(combinedForDates);
@@ -166,7 +166,7 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
     ].sort((a, b) => urgency(a) - urgency(b));
 
     return { contactFocus, contactFocusAll };
-  }, [donors, crm, donations]);
+  }, [visibleDonors, crm, donations]);
 
   const recent = [...donations].sort((a, b) => {
     const aDate = a.date.split('/').reverse().join('-');

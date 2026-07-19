@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, CalendarDays, PieChart, CalendarCheck, Plus, ImageIcon, RefreshCw } from 'lucide-react';
+import { Home, Users, CalendarDays, PieChart, CalendarCheck, Plus, ImageIcon, RefreshCw, Settings } from 'lucide-react';
 import { useAppStore } from '../store/AppContext';
 
 interface SideNavProps {
@@ -18,6 +18,7 @@ export function SideNav({ currentTab, setTab, onDonationClick }: SideNavProps) {
     { id: 'calendar', icon: CalendarDays,  label: 'חגים' },
     { id: 'reports',  icon: PieChart,      label: 'דוחות' },
     { id: 'poster',   icon: ImageIcon,     label: 'פוסטר שבת' },
+    { id: 'settings', icon: Settings,      label: 'הגדרות' },
   ];
 
   return (

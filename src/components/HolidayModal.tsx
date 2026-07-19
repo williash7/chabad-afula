@@ -4,7 +4,7 @@ import { createHolidayDoc } from '../lib/api';
 import { X, Check, MessageSquare, FileText, ExternalLink, Loader2, Download } from 'lucide-react';
 
 export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () => void }) {
-  const { holidayExtras, updateHolidayExtras, donors, crm, hk, failures } = useAppStore();
+  const { holidayExtras, updateHolidayExtras, visibleDonors, crm, hk, failures } = useAppStore();
   const [inviteCategory, setInviteCategory] = useState('all');
   
   // Use either the real id or fallback to stringified name for custom holidays
@@ -33,7 +33,7 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
   const [inviteText, setInviteText] = useState(`שלום פרטי,\nרצינו להזמין אותך ל${holiday.name}!\nנשמח מאוד לראותך השנה.\n\nלפרטים נוספים ואישור הגעה:\n`);
 
   const invitees = useMemo(() => {
-    let list = Object.values(donors);
+    let list = Object.values(visibleDonors);
     if (inviteCategory !== 'all') {
       list = list.filter((d: any) => {
         const c = crm[d.name] || {};
@@ -62,7 +62,7 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
       if (cB === 'close' && cA !== 'close') return 1;
       return 0;
     });
-  }, [donors, crm]);
+  }, [visibleDonors, crm]);
 
   const saveInsights = () => {
     updateHolidayExtras(id, { insights: insightForm });
@@ -268,7 +268,7 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
   };
 
   // Derived relative donors
-  const relDonors = Object.values(donors).filter((d: any) => {
+  const relDonors = Object.values(visibleDonors).filter((d: any) => {
     return d.donations?.some((don: any) => {
       if (!don.date) return false;
       const dDateStr = don.date.split('/').reverse().join('-');

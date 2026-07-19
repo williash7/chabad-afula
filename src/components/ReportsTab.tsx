@@ -4,7 +4,7 @@ import { RefreshCw, Download, FileText, X, PieChart, List, Search, ChevronDown }
 import { Donor } from '../types';
 
 export function ReportsTab() {
-  const { summary, donations, donors, crm, refresh } = useAppStore();
+  const { summary, donations, visibleDonors, crm, refresh } = useAppStore();
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [showAllDonations, setShowAllDonations] = useState(false);
   const [donTab, setDonTab] = useState<'donations' | 'meetings' | 'all'>('donations');
@@ -20,7 +20,7 @@ export function ReportsTab() {
   const total = summary.total || 1;
   const methods = Object.entries(summary.byMethod || {}).sort((a, b) => (b[1] as number) - (a[1] as number));
 
-  const topDonors: Donor[] = (Object.values(donors) as Donor[])
+  const topDonors: Donor[] = (Object.values(visibleDonors) as Donor[])
     .sort((a: Donor, b: Donor) => (b.total || 0) - (a.total || 0))
     .slice(0, 8);
   const maxD = topDonors[0]?.total || 1;

@@ -8,7 +8,7 @@ import { MergeContactsModal } from './MergeContactsModal';
 import { findGregorianBirthday, findHebrewBirthday, findYahrzeitEntries } from '../lib/donorDates';
 
 export function DonorsTab() {
-  const { donors, hk, failures, crm, refresh, updateCrm, nameMerges } = useAppStore();
+  const { donors, visibleDonors, hk, failures, crm, refresh, updateCrm, nameMerges } = useAppStore();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('total');
@@ -52,7 +52,7 @@ export function DonorsTab() {
   const hkNames = new Set(hk.filter(h => h.active).map(h => h.name));
   const errNames = new Set(failures.map(f => f.name));
 
-  let list: Donor[] = Object.values(donors);
+  let list: Donor[] = Object.values(visibleDonors);
   if (filter === 'close') list = list.filter(d => crm[d.name]?.circle === 'close');
   else if (filter === 'approach') list = list.filter(d => crm[d.name]?.circle === 'approach');
   else if (filter === 'third') list = list.filter(d => crm[d.name]?.circle === 'third');

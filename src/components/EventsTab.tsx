@@ -4,7 +4,7 @@ import { Plus, Check, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 export function EventsTab() {
-  const { eventsData, updateEventsData, donors, crm, hk, failures } = useAppStore();
+  const { eventsData, updateEventsData, visibleDonors, crm, hk, failures } = useAppStore();
   const [filter, setFilter] = useState('all');
   const [isAddingMode, setIsAddingMode] = useState(false);
   const [attEventId, setAttEventId] = useState<string | null>(null);
@@ -68,7 +68,7 @@ export function EventsTab() {
   };
 
   const currentAttEvent = eventsData.find((e: any) => e.id === attEventId);
-  const donorNames = Object.keys(donors).filter(n => {
+  const donorNames = Object.keys(visibleDonors).filter(n => {
     if (attSearch && !n.includes(attSearch)) return false;
     if (attCategory !== 'all') {
       const cData = crm[n] || {};

@@ -8,11 +8,13 @@ import {
 } from '../lib/api';
 import { Donor, Donation, ReportSummary } from '../types';
 import { extractMerges, applyMergesToCrm, coalesceDonorsByMerges, resolveCanonicalName, MERGES_KEY } from '../lib/nameMerges';
+import { AppSettings, loadSettings, saveSettings, filterDonorsBySettings } from '../lib/settings';
 
 interface AppState {
   summary: ReportSummary | null;
   donations: Donation[];
   donors: Record<string, Donor>;
+  visibleDonors: Record<string, Donor>;
   hk: any[];
   failures: any[];
   rebbeDate: Date | null;
@@ -26,6 +28,8 @@ interface AppState {
   holidayExtras: Record<string, any>;
   eventsData: any[];
   nameMerges: Record<string, string>;
+  settings: AppSettings;
+  updateSettings: (partial: Partial<AppSettings>) => void;
   refresh: () => void;
   addManualDonation: (donation: any) => void;
   updateCrm: (name: string, data: any) => void;
@@ -61,6 +65,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [nameMerges, setNameMerges] = useState<Record<string, string>>(initialCrm.merges);
   const [holidayExtras, setHolidayExtras] = useState<Record<string, any>>({});
   const [eventsData, setEventsData] = useState<any[]>([]);
+  const [settings, setSettings] = useState<AppSettings>(loadSettings());
+
+  const updateSettings = (partial: Partial<AppSettings>) => {
+    setSettings(prev => {
+      const next = { ...prev, ...partial };
+      saveSettings(next);
+      return next;
+    });
+  };
+
+  const visibleDonors = React.useMemo(
+    () => filterDonorsBySettings(donors, crm, settings),
+    [donors, crm, settings]
+  );
 
   const loadHebcal = () => {
     fetch('https://www.hebcal.com/shabbat?cfg=json&city=Afula&M=on')
@@ -317,11 +335,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      summary, donations, donors, hk, failures, rebbeDate,
+      summary, donations, donors, visibleDonors, hk, failures, rebbeDate,
       shabbat, holidays, hebrewDate,
       loading, loadingText, apiError, crm, holidayExtras, eventsData, nameMerges, refresh: loadAll,
       addManualDonation, updateCrm, updateHolidayExtras, updateEventsData, updateRebbeDate,
-      mergeContacts, unmergeContact,
+      mergeContacts, unmergeContact, settings, updateSettings,
     }}>
       {children}
     </AppContext.Provider>
