@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { computeLastContactByName } from '../lib/contactFocus';
-import { getScoreSnapshot, backfillLastWeek, POINT_RULES, SCORE_ACTION_EVENT } from '../lib/score';
+import { getScoreSnapshot, backfillLastWeek, getWeekActivities, POINT_RULES, SCORE_ACTION_EVENT } from '../lib/score';
 import { TrendingUp, Flame, ChevronDown, Info } from 'lucide-react';
 
 export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) => void } = {}) {
@@ -9,6 +9,7 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
   const [toast, setToast] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [detailWeek, setDetailWeek] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -38,6 +39,8 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
   const { total, streak, thisWeek, lastWeek, bestWeek } = snapshot;
   const progress = total % 100;
   const milestones = Math.floor(total / 100);
+
+  const weekActivities = useMemo(() => detailWeek ? getWeekActivities(detailWeek) : [], [detailWeek, tick]);
 
   const weeklyChangePct = lastWeek && lastWeek.points > 0
     ? Math.round(((thisWeek.points - lastWeek.points) / lastWeek.points) * 100)
@@ -102,15 +105,44 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
         <div className="bg-white rounded-2xl shadow-sm p-4 border border-gray-100">
           <div className="text-sm font-bold text-gray-400 uppercase tracking-wide mb-3">סיכום שבועי</div>
           <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="bg-[#FAF6EE] rounded-xl p-3 text-center">
+            <button
+              onClick={() => setDetailWeek(v => v === thisWeek.week ? null : thisWeek.week)}
+              disabled={thisWeek.actions === 0}
+              className={`rounded-xl p-3 text-center transition-colors disabled:cursor-default ${detailWeek === thisWeek.week ? 'bg-[#C9A84C]/15 border border-[#C9A84C]/40' : 'bg-[#FAF6EE] border border-transparent'}`}
+            >
               <div className="font-['Frank_Ruhl_Libre'] font-black text-[#0D1B2A] text-xl">{thisWeek.points}</div>
-              <div className="text-[11px] text-gray-500 mt-0.5">השבוע · {thisWeek.actions} פעולות</div>
-            </div>
-            <div className="bg-[#FAF6EE] rounded-xl p-3 text-center">
+              <div className="text-[11px] text-gray-500 mt-0.5 flex items-center justify-center gap-1">
+                השבוע · {thisWeek.actions} פעולות
+                {thisWeek.actions > 0 && <ChevronDown size={11} className={`transition-transform ${detailWeek === thisWeek.week ? 'rotate-180' : ''}`} />}
+              </div>
+            </button>
+            <button
+              onClick={() => lastWeek && setDetailWeek(v => v === lastWeek.week ? null : lastWeek.week)}
+              disabled={!lastWeek || lastWeek.actions === 0}
+              className={`rounded-xl p-3 text-center transition-colors disabled:cursor-default ${lastWeek && detailWeek === lastWeek.week ? 'bg-[#C9A84C]/15 border border-[#C9A84C]/40' : 'bg-[#FAF6EE] border border-transparent'}`}
+            >
               <div className="font-['Frank_Ruhl_Libre'] font-black text-[#0D1B2A] text-xl">{lastWeek?.points ?? '—'}</div>
-              <div className="text-[11px] text-gray-500 mt-0.5">שבוע שעבר{lastWeek ? ` · ${lastWeek.actions} פעולות` : ''}</div>
-            </div>
+              <div className="text-[11px] text-gray-500 mt-0.5 flex items-center justify-center gap-1">
+                שבוע שעבר{lastWeek ? ` · ${lastWeek.actions} פעולות` : ''}
+                {lastWeek && lastWeek.actions > 0 && <ChevronDown size={11} className={`transition-transform ${detailWeek === lastWeek.week ? 'rotate-180' : ''}`} />}
+              </div>
+            </button>
           </div>
+
+          {detailWeek && weekActivities.length > 0 && (
+            <div className="space-y-1.5 mb-3 border-t border-dashed border-gray-100 pt-3">
+              {weekActivities.map((a, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 bg-[#FAF6EE] rounded-lg px-3 py-1.5">
+                  <div className="min-w-0">
+                    <span className="text-xs text-[#0D1B2A]">{a.label}</span>
+                    <span className="text-[10px] text-gray-400 mr-1.5">{a.date.split('-').reverse().slice(0, 2).join('/')}</span>
+                  </div>
+                  <span className="shrink-0 text-xs font-bold text-[#C9A84C]">+{a.points}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="text-sm font-bold text-center mb-2">
             {!lastWeek ? (
               <span className="text-gray-400">שבוע ראשון!</span>

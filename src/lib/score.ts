@@ -18,6 +18,13 @@ export interface ScoreSnapshot {
   bestWeek: WeekEntry | null;
 }
 
+export interface ActivityLogEntry {
+  label: string;
+  points: number;
+  date: string; // "YYYY-MM-DD"
+  week: string; // "YYYY-Www"
+}
+
 export interface PointRule {
   label: string;
   points: number;
@@ -49,6 +56,8 @@ const LAST_ACTION_KEY = 'score_last_action_date';
 const WEEKLY_LOG_KEY = 'score_weekly_log';
 const BEST_WEEK_KEY = 'score_best_week';
 const BACKFILL_FLAG_KEY = 'score_backfill_v1_done';
+const ACTIVITY_LOG_KEY = 'score_activity_log';
+const ACTIVITY_LOG_MAX = 300; // מגביל את הגודל — לא צריך היסטוריה אינסופית
 
 const toDateStr = (d: Date) => d.toISOString().split('T')[0];
 
@@ -96,6 +105,29 @@ function addToWeek(weekStr: string, points: number, actions: number) {
   }
 }
 
+function readActivityLog(): ActivityLogEntry[] {
+  try {
+    return JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function appendActivityLog(entry: ActivityLogEntry) {
+  const log = readActivityLog();
+  log.push(entry);
+  if (log.length > ACTIVITY_LOG_MAX) log.splice(0, log.length - ACTIVITY_LOG_MAX);
+  localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(log));
+}
+
+// מחזיר את כל הפעולות הבודדות שנרשמו בשבוע נתון (מהחדשה לישנה) — לשימוש
+// בפתיחת "פירוט" בסיכום השבועי, כדי לראות בדיוק אילו פעולות בוצעו.
+export function getWeekActivities(weekStr: string): ActivityLogEntry[] {
+  return readActivityLog()
+    .filter(e => e.week === weekStr)
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
 // הרצף כפי שיוצג עכשיו: אם עברו יומיים+ בלי שום פעולה, הרצף "נשבר" לצורך תצוגה
 // גם אם עוד לא נרשמה פעולה חדשה שתאפס אותו רשמית ב-storage.
 function getCurrentStreakDisplay(today: Date): number {
@@ -139,10 +171,13 @@ export function logAction(key: PointRuleKey, count: number = 1) {
     localStorage.setItem(LAST_ACTION_KEY, todayStr);
   }
 
-  addToWeek(getISOWeek(today), totalPoints, count);
+  const weekStr = getISOWeek(today);
+  addToWeek(weekStr, totalPoints, count);
+  const label = count > 1 ? `${rule.label} ×${count}` : rule.label;
+  appendActivityLog({ label, points: totalPoints, date: todayStr, week: weekStr });
 
   window.dispatchEvent(new CustomEvent(SCORE_ACTION_EVENT, {
-    detail: { points: totalPoints, label: count > 1 ? `${rule.label} ×${count}` : rule.label },
+    detail: { points: totalPoints, label },
   }));
 }
 
@@ -177,7 +212,9 @@ export function backfillLastWeek(donations: any[]): BackfillResult | null {
     if (!date || date < cutoff || date > today) return;
     const isMeeting = (d.amount || 0) === 0;
     const rule = isMeeting ? POINT_RULES.meeting : POINT_RULES.donation;
-    addToWeek(getISOWeek(date), rule.points, 1);
+    const weekStr = getISOWeek(date);
+    addToWeek(weekStr, rule.points, 1);
+    appendActivityLog({ label: `${rule.label} (גיבוי)`, points: rule.points, date: toDateStr(date), week: weekStr });
     totalPoints += rule.points;
     totalCount += 1;
   });
