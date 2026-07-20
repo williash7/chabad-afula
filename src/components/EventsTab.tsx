@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { Plus, Check, X, ClipboardList, Trash2, Pencil, Clock } from 'lucide-react';
 import { format } from 'date-fns';
-import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL, nextEventOccurrence, formatRemaining } from '../lib/tasks';
+import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL, nextEventOccurrence, formatRemaining, createEventMediaTasks } from '../lib/tasks';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
 
 export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: number } } = {}) {
@@ -82,7 +82,8 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
         freq: evFreq,
         date: evDate,
         time: evTime,
-        attendance: {}
+        attendance: {},
+        tasks: createEventMediaTasks(),
       };
       updateEventsData([...eventsData, newEv]);
     }
@@ -164,6 +165,17 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
   const addEventInviteTask = () => {
     if (!currentTasksEvent || donorNames.length === 0) return;
     const nextTasks = [...(currentTasksEvent.tasks || []), createInviteTask(currentTasksEvent.name, donorNames)];
+    updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+  };
+
+  const hasMediaTasks = (ev: any) => {
+    const mediaTexts = createEventMediaTasks().map(t => t.text);
+    return (ev?.tasks || []).some((t: any) => mediaTexts.includes(t.text));
+  };
+
+  const addEventMediaTasks = () => {
+    if (!currentTasksEvent || hasMediaTasks(currentTasksEvent)) return;
+    const nextTasks = [...(currentTasksEvent.tasks || []), ...createEventMediaTasks()];
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
   };
 
@@ -482,6 +494,15 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                <input value={taskText} onChange={e => setTaskText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addEventTask()} type="text" className="flex-1 bg-white border border-[#EDE6D6] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A84C]" placeholder="משימה חדשה..." />
                <button onClick={addEventTask} className="bg-[#0D1B2A] rounded-xl px-4 text-[#E8C97A] font-bold shadow-sm shrink-0">הוסף</button>
              </div>
+
+             {!hasMediaTasks(currentTasksEvent) && (
+               <button
+                 onClick={addEventMediaTasks}
+                 className="w-full flex items-center justify-center gap-1.5 bg-blue-50 text-blue-700 text-sm font-bold py-2.5 rounded-xl mb-3 shrink-0"
+               >
+                 📸 הוסף משימות צילום ופרסום (סטטוס + פייסבוק)
+               </button>
+             )}
 
              <div className="shrink-0 mb-3">
                <AIPlanningAssistant

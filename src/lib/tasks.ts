@@ -44,6 +44,15 @@ export function formatRemaining(target: Date, now: Date): string {
   return 'פחות משעה';
 }
 
+// שתי משימות ברירת מחדל לכל אירוע: פרסום קידום לפני, וצילום+פרסום סיכום אחרי
+// (הצילום עצמו קורה בשעת מעשה באירוע — לא משימה נפרדת שמתוזמנת בפני עצמה).
+export function createEventMediaTasks(): TaskItem[] {
+  return [
+    { text: '📸 פרסום קידום לפני האירוע (סטטוס + פייסבוק)', done: false },
+    { text: '📸 צילום בזמן האירוע ופרסום סיכום אחרי (סטטוס + פייסבוק)', done: false },
+  ];
+}
+
 export function createInviteTask(label: string, people: string[]): TaskItem {
   return {
     text: `📞 הזמנת ${label} — ${people.length} אנשים`,
