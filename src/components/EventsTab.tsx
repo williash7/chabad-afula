@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Plus, Check, X, ClipboardList } from 'lucide-react';
+import { Plus, Check, X, ClipboardList, Trash2, Pencil, Clock } from 'lucide-react';
 import { format } from 'date-fns';
-import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL } from '../lib/tasks';
+import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL, nextEventOccurrence, formatRemaining } from '../lib/tasks';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
 
 export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: number } } = {}) {
   const { eventsData, updateEventsData, visibleDonors, crm, hk, failures } = useAppStore();
   const [filter, setFilter] = useState('all');
   const [isAddingMode, setIsAddingMode] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [attEventId, setAttEventId] = useState<string | null>(null);
   const [tasksEventId, setTasksEventId] = useState<string | null>(null);
   const [taskText, setTaskText] = useState('');
@@ -20,12 +21,17 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
   const [evTime, setEvTime] = useState('');
 
   React.useEffect(() => {
-    if (addTrigger?.tab === 'events' && addTrigger.count) setIsAddingMode(true);
+    if (addTrigger?.tab === 'events' && addTrigger.count) {
+      resetEventForm();
+      setEditingEventId(null);
+      setIsAddingMode(true);
+    }
   }, [addTrigger]);
 
   const [attSearch, setAttSearch] = useState('');
   const [attCategory, setAttCategory] = useState('all');
   const [pendingAtt, setPendingAtt] = useState<Record<string, boolean>>({});
+  const [attDateISO, setAttDateISO] = useState(() => new Date().toISOString().split('T')[0]);
 
   const typeIcons: Record<string, string> = { shabbat: '🕯️', minyan: '🙏', class: '📚', other: '📌' };
   const typeLabels: Record<string, string> = { shabbat: 'שבת', minyan: 'מניין', class: 'שיעור', other: 'אחר' };
@@ -33,39 +39,88 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
 
   const activeEvents = filter === 'all' ? eventsData : eventsData.filter((e: any) => e.type === filter);
 
+  const resetEventForm = () => {
+    setEvName('');
+    setEvType('shabbat');
+    setEvFreq('weekly');
+    setEvDate(new Date().toISOString().split('T')[0]);
+    setEvTime('');
+  };
+
+  const openAddModal = () => {
+    resetEventForm();
+    setEditingEventId(null);
+    setIsAddingMode(true);
+  };
+
+  const openEditModal = (ev: any) => {
+    setEvName(ev.name || '');
+    setEvType(ev.type || 'shabbat');
+    setEvFreq(ev.freq || 'weekly');
+    setEvDate(ev.date || new Date().toISOString().split('T')[0]);
+    setEvTime(ev.time || '');
+    setEditingEventId(ev.id);
+    setIsAddingMode(true);
+  };
+
   const saveEvent = () => {
     if (!evName.trim()) return;
-    const newEv = {
-      id: `ev_${Date.now()}`,
-      name: evName.trim(),
-      type: evType,
-      freq: evFreq,
-      date: evDate,
-      time: evTime,
-      attendance: {}
-    };
-    updateEventsData([...eventsData, newEv]);
+    if (editingEventId) {
+      updateEventsData(eventsData.map((e: any) => e.id === editingEventId ? {
+        ...e,
+        name: evName.trim(),
+        type: evType,
+        freq: evFreq,
+        date: evDate,
+        time: evTime,
+      } : e));
+    } else {
+      const newEv = {
+        id: `ev_${Date.now()}`,
+        name: evName.trim(),
+        type: evType,
+        freq: evFreq,
+        date: evDate,
+        time: evTime,
+        attendance: {}
+      };
+      updateEventsData([...eventsData, newEv]);
+    }
     setIsAddingMode(false);
-    setEvName('');
+    setEditingEventId(null);
+    resetEventForm();
+  };
+
+  const deleteEvent = (ev: any) => {
+    if (!confirm(`למחוק את "${ev.name}"? כל היסטוריית הנוכחות והמשימות שלו יימחקו לצמיתות.`)) return;
+    updateEventsData(eventsData.filter((e: any) => e.id !== ev.id));
   };
 
   const openAttModal = (ev: any) => {
-    const today = format(new Date(), 'dd/MM/yyyy');
-    setPendingAtt({ ...(ev.attendance?.[today] || {}) });
+    const iso = new Date().toISOString().split('T')[0];
+    setAttDateISO(iso);
+    const dateKey = format(new Date(iso), 'dd/MM/yyyy');
+    setPendingAtt({ ...(ev.attendance?.[dateKey] || {}) });
     setAttEventId(ev.id);
     setAttSearch('');
   };
 
+  const changeAttDate = (iso: string) => {
+    setAttDateISO(iso);
+    const dateKey = format(new Date(iso), 'dd/MM/yyyy');
+    setPendingAtt({ ...(currentAttEvent?.attendance?.[dateKey] || {}) });
+  };
+
   const saveAttendance = () => {
     if (!attEventId) return;
-    const today = format(new Date(), 'dd/MM/yyyy');
+    const dateKey = format(new Date(attDateISO), 'dd/MM/yyyy');
     const updated = eventsData.map((e: any) => {
       if (e.id === attEventId) {
         return {
           ...e,
           attendance: {
             ...e.attendance,
-            [today]: pendingAtt
+            [dateKey]: pendingAtt
           }
         };
       }
@@ -138,7 +193,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
           <div className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#C9A84C]">אירועים קבועים</div>
           <div className="text-[11px] text-white/45 mt-[1px]">{activeEvents.length} אירועים פעילים</div>
         </div>
-        <button onClick={() => setIsAddingMode(true)} className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0">
+        <button onClick={openAddModal} className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0">
           <Plus size={20} />
         </button>
       </div>
@@ -163,6 +218,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
             const lastDate = attDates[0];
             const lastCount = lastDate ? Object.values(ev.attendance[lastDate]).filter(Boolean).length : 0;
             const lastNames = lastDate ? Object.entries(ev.attendance[lastDate]).filter(e => e[1]).slice(0, 8).map(e => e[0].split(' ')[0]) : [];
+            const nextOcc = nextEventOccurrence(ev, new Date());
 
             return (
               <div key={ev.id} className="bg-white rounded-xl shadow-sm border border-[#EDE6D6] overflow-hidden">
@@ -172,9 +228,12 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                       <div>
                         <div className="font-bold text-[#0D1B2A] text-[15px]">{ev.name}</div>
                         <div className="text-[11px] text-gray-500">{freqLabels[ev.freq] || ev.freq} {ev.time && `· ${ev.time}`}</div>
+                        {nextOcc && (
+                          <div className="text-[10px] text-[#9B7A2F] flex items-center gap-1 mt-0.5"><Clock size={10}/> {formatRemaining(nextOcc, new Date())} למפגש הבא</div>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         onClick={() => { setTasksEventId(ev.id); setAttCategory('all'); setAttSearch(''); }}
                         className="relative bg-purple-50 text-purple-700 text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-transform flex items-center gap-1.5 whitespace-nowrap"
@@ -189,9 +248,15 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                       <button onClick={() => openAttModal(ev)} className="bg-[#C9A84C]/10 text-[#9B7A2F] text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-transform flex items-center gap-1.5 whitespace-nowrap">
                          <Check size={14}/> נוכחות
                       </button>
+                      <button onClick={() => openEditModal(ev)} title="עריכת אירוע" className="bg-gray-50 text-gray-500 p-1.5 rounded-lg active:scale-95 transition-transform shrink-0">
+                         <Pencil size={14}/>
+                      </button>
+                      <button onClick={() => deleteEvent(ev)} title="מחיקת אירוע" className="bg-red-50 text-red-400 p-1.5 rounded-lg active:scale-95 transition-transform shrink-0">
+                         <Trash2 size={14}/>
+                      </button>
                     </div>
                  </div>
-                 
+
                  <div className="bg-[#FAF6EE] p-2.5 flex justify-around">
                    <div className="text-center">
                      <div className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A] leading-tight">{attDates.length}</div>
@@ -229,12 +294,12 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
         </div>
       </div>
 
-      {/* Add Event Modal */}
+      {/* Add/Edit Event Modal */}
       {isAddingMode && (
         <div className="fixed inset-0 bg-black/60 z-[200] flex items-end justify-center p-0 md:p-4 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && setIsAddingMode(false)}>
            <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl p-5 pb-8 w-full max-w-[430px] animate-in slide-in-from-bottom duration-300">
              <div className="flex justify-between items-center mb-5">
-               <h2 className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A]">📌 הוספת אירוע קבוע</h2>
+               <h2 className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A]">{editingEventId ? '✏️ עריכת אירוע קבוע' : '📌 הוספת אירוע קבוע'}</h2>
                <button onClick={() => setIsAddingMode(false)} className="bg-gray-200/50 p-2 rounded-full text-gray-500 hover:bg-gray-200"><X size={16}/></button>
              </div>
              
@@ -271,7 +336,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                </div>
                
                <button onClick={saveEvent} className="w-full bg-gradient-to-br from-[#0D1B2A] to-[#1A2E45] text-white rounded-xl py-3.5 font-bold shadow-md mt-2">
-                 שמור אירוע
+                 {editingEventId ? 'שמור שינויים' : 'שמור אירוע'}
                </button>
              </div>
            </div>
@@ -283,14 +348,23 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
         <div className="fixed inset-0 bg-black/60 z-[200] flex items-end justify-center p-0 md:p-4 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && setAttEventId(null)}>
            <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl p-5 pb-8 w-full max-w-[430px] max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
              <div className="flex justify-between items-start mb-4">
-               <div>
+               <div className="flex-1">
                  <h2 className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] flex items-center gap-2">✅ נוכחות — {currentAttEvent?.name}</h2>
-                 <div className="text-xs text-gray-500 mt-0.5">תאריך: {format(new Date(), 'dd/MM/yyyy')}</div>
+                 <div className="flex items-center gap-2 mt-1.5">
+                   <label className="text-xs text-gray-500 shrink-0">תאריך המפגש:</label>
+                   <input
+                     type="date"
+                     value={attDateISO}
+                     onChange={e => changeAttDate(e.target.value)}
+                     className="bg-white border border-[#EDE6D6] rounded-lg px-2 py-1 text-xs outline-none focus:border-[#C9A84C]"
+                   />
+                 </div>
+                 <div className="text-[10px] text-gray-400 mt-1">אפשר לבחור תאריך מהעבר כדי לעדכן נוכחות למפגש שכבר התקיים (למשל שיעור שבועי משבוע שעבר).</div>
                </div>
-               <button onClick={() => setAttEventId(null)} className="bg-gray-200/50 p-2 rounded-full text-gray-500 hover:bg-gray-200"><X size={16}/></button>
+               <button onClick={() => setAttEventId(null)} className="bg-gray-200/50 p-2 rounded-full text-gray-500 hover:bg-gray-200 shrink-0"><X size={16}/></button>
              </div>
 
-             <input 
+             <input
                type="text" 
                placeholder="חיפוש לפי שם..." 
                value={attSearch}
@@ -351,8 +425,16 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
         <div className="fixed inset-0 bg-black/60 z-[200] flex items-end justify-center p-0 md:p-4 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && setTasksEventId(null)}>
            <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl p-5 pb-8 w-full max-w-[430px] max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
              <div className="flex justify-between items-start mb-4">
-               <h2 className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] flex items-center gap-2">📋 משימות — {currentTasksEvent.name}</h2>
-               <button onClick={() => setTasksEventId(null)} className="bg-gray-200/50 p-2 rounded-full text-gray-500 hover:bg-gray-200"><X size={16}/></button>
+               <div>
+                 <h2 className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] flex items-center gap-2">📋 משימות — {currentTasksEvent.name}</h2>
+                 {(() => {
+                   const nextOcc = nextEventOccurrence(currentTasksEvent, new Date());
+                   return nextOcc ? (
+                     <div className="text-[11px] text-[#9B7A2F] flex items-center gap-1 mt-1"><Clock size={11}/> {formatRemaining(nextOcc, new Date())} עד המפגש הבא — כדאי לסיים עד אז</div>
+                   ) : null;
+                 })()}
+               </div>
+               <button onClick={() => setTasksEventId(null)} className="bg-gray-200/50 p-2 rounded-full text-gray-500 hover:bg-gray-200 shrink-0"><X size={16}/></button>
              </div>
 
              <div className="flex-1 overflow-y-auto pr-1 space-y-2 mb-3 custom-scrollbar">

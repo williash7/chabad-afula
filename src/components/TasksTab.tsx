@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Check, ClipboardList, Calendar, CalendarCheck, Cake, X, ChevronLeft, Plus } from 'lucide-react';
+import { Check, ClipboardList, Calendar, CalendarCheck, Cake, X, ChevronLeft, Plus, Clock, ListTodo } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
 import { HolidayModal } from './HolidayModal';
 import { QuickLogButtons } from './QuickLogButtons';
 import { computePersonalDateEvents } from '../lib/personalDates';
-import { inviteRemainingMinutes, toggleInvitePerson } from '../lib/tasks';
+import { inviteRemainingMinutes, toggleInvitePerson, STANDALONE_TASKS_ID, nextEventOccurrence, formatRemaining } from '../lib/tasks';
 import { getCustomHols } from '../lib/api';
 
 export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; addTrigger?: { tab: string; count: number } }) {
@@ -15,6 +15,8 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addTarget, setAddTarget] = useState<{ kind: 'holiday' | 'event'; id: string } | null>(null);
   const [addText, setAddText] = useState('');
+  const [standaloneText, setStandaloneText] = useState('');
+  const [standaloneDue, setStandaloneDue] = useState('');
 
   React.useEffect(() => {
     if (addTrigger?.tab === 'tasks' && addTrigger.count) setIsAddOpen(true);
@@ -48,6 +50,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   }, [holidays]);
 
   const holidayGroups = Object.keys(holidayExtras)
+    .filter(id => id !== STANDALONE_TASKS_ID)
     .map(id => ({ id, tasks: holidayExtras[id]?.tasks || [] }))
     .filter(g => g.tasks.length > 0);
 
@@ -55,8 +58,38 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     .map(e => ({ id: e.id, name: e.name, tasks: e.tasks || [] }))
     .filter(g => g.tasks.length > 0);
 
+  const standaloneTasks: any[] = holidayExtras[STANDALONE_TASKS_ID]?.tasks || [];
+
   const openHolidayCount = holidayGroups.reduce((s, g) => s + g.tasks.filter((t: any) => !t.done).length, 0);
   const openEventCount = eventGroups.reduce((s, g) => s + g.tasks.filter((t: any) => !t.done).length, 0);
+  const openStandaloneCount = standaloneTasks.filter((t: any) => !t.done).length;
+
+  const toggleStandaloneTask = (idx: number) => {
+    const tasks = [...standaloneTasks];
+    tasks[idx] = { ...tasks[idx], done: !tasks[idx].done };
+    updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
+  };
+
+  const deleteStandaloneTask = (idx: number) => {
+    const tasks = [...standaloneTasks];
+    tasks.splice(idx, 1);
+    updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
+  };
+
+  const toggleStandaloneInvitePerson = (idx: number, person: string) => {
+    const tasks = [...standaloneTasks];
+    tasks[idx] = toggleInvitePerson(tasks[idx], person);
+    updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
+  };
+
+  const addStandaloneTask = () => {
+    if (!standaloneText.trim()) return;
+    const newTask: any = { text: standaloneText.trim(), done: false };
+    if (standaloneDue) newTask.dueDate = standaloneDue;
+    updateHolidayExtras(STANDALONE_TASKS_ID, { tasks: [...standaloneTasks, newTask] });
+    setStandaloneText('');
+    setStandaloneDue('');
+  };
 
   const openHolidayFull = (holidayId: string) => {
     const found = holidayLookup[holidayId];
@@ -151,7 +184,12 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
         <div onClick={onToggle} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 cursor-pointer ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
           {t.done && <Check size={12} className="text-white" />}
         </div>
-        <span onClick={onToggle} className={`text-sm flex-1 cursor-pointer ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
+          <span className={`text-sm ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+          {t.dueDate && !t.done && (
+            <div className="text-[10px] text-[#9B7A2F] flex items-center gap-1 mt-0.5"><Clock size={10} /> {formatRemaining(new Date(t.dueDate), new Date())}</div>
+          )}
+        </div>
         <button onClick={onDelete} className="text-red-300 hover:text-red-500 shrink-0" title="מחק משימה"><X size={14} /></button>
       </div>
     )
@@ -172,7 +210,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
         </div>
         <div className="flex-1 px-3 md:px-0">
           <div className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#C9A84C]">משימות</div>
-          <div className="text-[11px] text-white/45 mt-[1px]">{openHolidayCount + openEventCount} משימות פתוחות · {personalDates.length} תאריכים ב-30 הימים הקרובים</div>
+          <div className="text-[11px] text-white/45 mt-[1px]">{openHolidayCount + openEventCount + openStandaloneCount} משימות פתוחות · {personalDates.length} תאריכים ב-30 הימים הקרובים</div>
         </div>
         <button onClick={() => setIsAddOpen(true)} className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0 hover:bg-white/20 transition-colors">
           <Plus size={18} />
@@ -216,20 +254,27 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
             </div>
           ) : (
             <div className="space-y-4">
-              {holidayGroups.map(g => (
-                <div key={g.id}>
-                  <button onClick={() => openHolidayFull(g.id)} className="flex items-center gap-1 text-xs font-bold text-[#9B7A2F] mb-2 hover:underline">
-                    {g.id} <ChevronLeft size={12} />
-                  </button>
-                  <div className="space-y-2">
-                    {g.tasks.map((t: any, i: number) => (
-                      <div key={i}>
-                        {renderTaskItem(t, () => toggleHolidayTask(g.id, i), () => deleteHolidayTask(g.id, i), p => toggleHolidayInvitePerson(g.id, i, p))}
-                      </div>
-                    ))}
+              {holidayGroups.map(g => {
+                const info = holidayLookup[g.id];
+                const target = info?.dateStr ? new Date(info.dateStr) : null;
+                return (
+                  <div key={g.id}>
+                    <button onClick={() => openHolidayFull(g.id)} className="flex items-center gap-1 text-xs font-bold text-[#9B7A2F] mb-1 hover:underline">
+                      {g.id} <ChevronLeft size={12} />
+                    </button>
+                    {target && (
+                      <div className="text-[10px] text-gray-400 flex items-center gap-1 mb-2"><Clock size={10} /> {formatRemaining(target, new Date())}</div>
+                    )}
+                    <div className="space-y-2">
+                      {g.tasks.map((t: any, i: number) => (
+                        <div key={i}>
+                          {renderTaskItem(t, () => toggleHolidayTask(g.id, i), () => deleteHolidayTask(g.id, i), p => toggleHolidayInvitePerson(g.id, i, p))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -245,22 +290,71 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
             </div>
           ) : (
             <div className="space-y-4">
-              {eventGroups.map(g => (
-                <div key={g.id}>
-                  <button onClick={() => setTab('events')} className="flex items-center gap-1 text-xs font-bold text-[#9B7A2F] mb-2 hover:underline">
-                    {g.name} <ChevronLeft size={12} />
-                  </button>
-                  <div className="space-y-2">
-                    {g.tasks.map((t: any, i: number) => (
-                      <div key={i}>
-                        {renderTaskItem(t, () => toggleEventTask(g.id, i), () => deleteEventTask(g.id, i), p => toggleEventInvitePerson(g.id, i, p))}
-                      </div>
-                    ))}
+              {eventGroups.map(g => {
+                const ev = (eventsData as any[]).find((e: any) => e.id === g.id);
+                const nextOcc = ev ? nextEventOccurrence(ev, new Date()) : null;
+                return (
+                  <div key={g.id}>
+                    <button onClick={() => setTab('events')} className="flex items-center gap-1 text-xs font-bold text-[#9B7A2F] mb-1 hover:underline">
+                      {g.name} <ChevronLeft size={12} />
+                    </button>
+                    {nextOcc && (
+                      <div className="text-[10px] text-gray-400 flex items-center gap-1 mb-2"><Clock size={10} /> {formatRemaining(nextOcc, new Date())} עד המפגש הבא</div>
+                    )}
+                    <div className="space-y-2">
+                      {g.tasks.map((t: any, i: number) => (
+                        <div key={i}>
+                          {renderTaskItem(t, () => toggleEventTask(g.id, i), () => deleteEventTask(g.id, i), p => toggleEventInvitePerson(g.id, i, p))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* משימות חד-פעמיות */}
+        <div>
+          <h2 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A] mb-3 flex items-center gap-2">
+            <ListTodo size={18} className="text-[#C9A84C]" /> משימות חד-פעמיות
+          </h2>
+          {standaloneTasks.length === 0 ? (
+            <div className="bg-white rounded-xl p-4 text-center text-gray-500 shadow-sm text-sm border border-[#EDE6D6]">
+              אין עדיין משימות חד-פעמיות. למשל: "לעדכן לכל אנשי הקשר ימי הולדת ויארצייט".
+            </div>
+          ) : (
+            <div className="space-y-2 mb-3">
+              {standaloneTasks.map((t: any, i: number) => (
+                <div key={i}>
+                  {renderTaskItem(t, () => toggleStandaloneTask(i), () => deleteStandaloneTask(i), p => toggleStandaloneInvitePerson(i, p))}
                 </div>
               ))}
             </div>
           )}
+          <div className="bg-white rounded-xl p-3 border border-dashed border-[#EDE6D6] space-y-2 mt-3">
+            <input
+              value={standaloneText}
+              onChange={e => setStandaloneText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addStandaloneTask()}
+              type="text"
+              className="w-full bg-[#FAF6EE] border border-[#EDE6D6] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A84C]"
+              placeholder="משימה חדשה... (למשל: לעדכן ימי הולדת ויארצייט)"
+            />
+            <div className="flex gap-2">
+              <input
+                value={standaloneDue}
+                onChange={e => setStandaloneDue(e.target.value)}
+                type="date"
+                className="flex-1 bg-[#FAF6EE] border border-[#EDE6D6] rounded-xl px-3 py-2 text-xs outline-none focus:border-[#C9A84C]"
+                title="דדליין (לא חובה)"
+              />
+              <button onClick={addStandaloneTask} disabled={!standaloneText.trim()} className="bg-[#0D1B2A] rounded-xl px-4 text-[#E8C97A] font-bold text-sm shadow-sm disabled:opacity-40 shrink-0">
+                הוסף
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
