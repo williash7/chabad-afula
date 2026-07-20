@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Phone, MessageSquare } from 'lucide-react';
 import { useAppStore } from '../store/AppContext';
+import { logAction } from '../lib/score';
 
 function resolvePhone(donorName: string, donors: Record<string, any>, crm: Record<string, any>): string {
   const donor = donors[donorName] || {};
@@ -25,6 +26,7 @@ export function QuickLogButtons({ donorName, compact = false }: { donorName: str
     const { apiPost } = await import('../lib/api');
     const dateStr = new Date().toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
     await apiPost('addMeeting', { name: donorName, date: dateStr, meetType, purpose: '', notes: '' });
+    logAction(10, 'מפגש נרשם');
     refresh();
   };
 

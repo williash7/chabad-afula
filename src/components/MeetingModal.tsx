@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { X, Calendar, ClipboardList } from 'lucide-react';
+import { logAction } from '../lib/score';
 
 export function MeetingModal({ donorName, onClose }: { donorName?: string; onClose: () => void }) {
   const { donors, refresh } = useAppStore();
@@ -37,6 +38,7 @@ export function MeetingModal({ donorName, onClose }: { donorName?: string; onClo
       if (res.error) {
         alert('שגיאה בשמירה: ' + res.error);
       } else {
+        logAction(10, 'מפגש נרשם');
         refresh();
         onClose();
       }
