@@ -463,7 +463,8 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                <button onClick={() => setTasksEventId(null)} className="bg-gray-200/50 p-2 rounded-full text-gray-500 hover:bg-gray-200 shrink-0"><X size={16}/></button>
              </div>
 
-             <div className="flex-1 overflow-y-auto pr-1 space-y-2 mb-3 custom-scrollbar">
+             <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-3">
+             <div className="space-y-2">
                {(currentTasksEvent.tasks || []).length === 0 && (
                  <div className="text-sm text-gray-400 text-center bg-white rounded-xl p-4 border border-[#EDE6D6]">אין עדיין משימות לאירוע הזה</div>
                )}
@@ -504,7 +505,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                ))}
              </div>
 
-             <div className="flex gap-2 mb-3 shrink-0">
+             <div className="flex gap-2">
                <input value={taskText} onChange={e => setTaskText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addEventTask()} type="text" className="flex-1 bg-white border border-[#EDE6D6] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A84C]" placeholder="משימה חדשה..." />
                <button onClick={addEventTask} className="bg-[#0D1B2A] rounded-xl px-4 text-[#E8C97A] font-bold shadow-sm shrink-0">הוסף</button>
              </div>
@@ -512,13 +513,13 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
              {!hasMediaTasks(currentTasksEvent) && (
                <button
                  onClick={addEventMediaTasks}
-                 className="w-full flex items-center justify-center gap-1.5 bg-blue-50 text-blue-700 text-sm font-bold py-2.5 rounded-xl mb-3 shrink-0"
+                 className="w-full flex items-center justify-center gap-1.5 bg-blue-50 text-blue-700 text-sm font-bold py-2.5 rounded-xl"
                >
                  📸 הוסף משימות צילום ופרסום (סטטוס + פייסבוק)
                </button>
              )}
 
-             <div className="shrink-0 mb-3">
+             <div>
                <AIPlanningAssistant
                  title={currentTasksEvent.name}
                  contextLines={[
@@ -545,7 +546,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                />
              </div>
 
-             <div className="border-t border-dashed border-[#EDE6D6] pt-3 shrink-0">
+             <div className="border-t border-dashed border-[#EDE6D6] pt-3">
                <div className="text-[11px] font-bold text-gray-500 uppercase mb-2">או צור משימת הזמנה (📞 {MINUTES_PER_CALL} דק׳ לאדם) לפי מעגל קרבה:</div>
                <div className="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar">
                  {[
@@ -575,6 +576,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                >
                  <ClipboardList size={14} /> הוסף משימת הזמנה ל-{donorNames.length} אנשים (≈{donorNames.length * MINUTES_PER_CALL} דק׳)
                </button>
+             </div>
              </div>
            </div>
         </div>
