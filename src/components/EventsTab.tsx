@@ -5,9 +5,10 @@ import { format } from 'date-fns';
 import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL, nextEventOccurrence, formatRemaining, createEventMediaTasks } from '../lib/tasks';
 import { logAction } from '../lib/score';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
+import { FacebookPostAssistant } from './FacebookPostAssistant';
 
 export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: number } } = {}) {
-  const { eventsData, updateEventsData, visibleDonors, crm, hk, failures } = useAppStore();
+  const { eventsData, updateEventsData, visibleDonors, crm, hk, failures, settings } = useAppStore();
   const [filter, setFilter] = useState('all');
   const [isAddingMode, setIsAddingMode] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -530,6 +531,17 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                    updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
                    logAction('task_create', result.tasks.length);
                  }}
+               />
+               <FacebookPostAssistant
+                 event={{
+                   name: currentTasksEvent.name,
+                   type: currentTasksEvent.type,
+                   date: currentTasksEvent.date,
+                   time: currentTasksEvent.time || '',
+                   freq: currentTasksEvent.freq,
+                 }}
+                 fbPageId={settings.fbPageId}
+                 fbAccessToken={settings.fbAccessToken}
                />
              </div>
 

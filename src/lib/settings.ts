@@ -10,6 +10,8 @@ export interface AppSettings {
   phoneOnly: boolean;
   donorsOnly: boolean; // רק מי שתרם בפועל לפחות פעם אחת
   targetOnly: boolean; // רק מסומנים "🎯 להקרב"
+  fbPageId: string;      // מזהה דף הפייסבוק
+  fbAccessToken: string; // טוקן גישה לדף
 }
 
 export const ALL_CIRCLES = ['close', 'approach', 'third', 'far', 'none'];
@@ -28,6 +30,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   phoneOnly: false,
   donorsOnly: false,
   targetOnly: false,
+  fbPageId: '',
+  fbAccessToken: '',
 };
 
 const STORAGE_KEY = 'app_settings_v1';
