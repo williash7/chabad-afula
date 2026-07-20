@@ -63,6 +63,19 @@ export function computePersonalDateEvents(
         events.push({ name, msg: label + ' ' + (dist === 0 ? 'היום' : `בעוד ${dist} ימים`), icon: '🕯️', dist });
       }
     });
+
+    // ימי הולדת של בני משפחה "רק שם" (בלי כרטיס משלהם) — מוצגים תחת שם
+    // איש הקשר שאצלו הם רשומים, כדי שאפשר יהיה ללחוץ ולהגיע לניהול שלהם
+    const family: any[] = crm[name]?.family || [];
+    family.forEach(f => {
+      if (f.freeName && f.birthday) {
+        const dist = nextGregorianRecurrenceDays(f.birthday, today);
+        if (dist !== null) {
+          const label = `יום הולדת ${f.freeName}${f.relation ? ` (${f.relation})` : ''}`;
+          events.push({ name, msg: label + ' ' + (dist === 0 ? 'היום' : `בעוד ${dist} ימים`), icon: '🎂', dist });
+        }
+      }
+    });
   });
 
   events.sort((a, b) => a.dist - b.dist);
