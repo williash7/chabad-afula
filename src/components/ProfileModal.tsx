@@ -11,7 +11,7 @@ import { HebrewDatePicker, emptyHebrewDateValue, hebrewDateValueToHDate, hdateTo
 import { Link2 } from 'lucide-react';
 import {
   isImportantDateKey, isYahrzeitKey, isHebrewStyleDateKey,
-  gregorianPairFor, hebrewPairFor,
+  gregorianPairFor, hebrewPairFor, findGregorianBirthday, findHebrewBirthday,
 } from '../lib/donorDates';
 import { toCanonicalHebrewString, parseCanonicalHebrewString, hebrewToGregorianCompanion, gregorianToHebrewCompanion } from '../lib/hebrewDates';
 import { computeLastContactByName, formatLastContact } from '../lib/contactFocus';
@@ -21,6 +21,7 @@ interface FamilyMember {
   relation: string;
   linkedName?: string;
   freeName?: string;
+  birthday?: string;
 }
 
 export function ProfileModal({ name, onClose }: { name: string, onClose: () => void }) {
@@ -40,13 +41,18 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
   const [familyLinkMode, setFamilyLinkMode] = useState<'link' | 'free'>('link');
   const [familyNameInput, setFamilyNameInput] = useState('');
   const [familyRelation, setFamilyRelation] = useState('');
+  const [familyBirthday, setFamilyBirthday] = useState('');
+  const [familyDropdownOpen, setFamilyDropdownOpen] = useState(false);
 
   const donor = donors[name] || { name, total: 0, donations: [], lastDate: '' };
   const crmData = crm[name] || { circle: 'far', target: false, phone: '' };
   const lastContactDate = React.useMemo(() => computeLastContactByName(donations).get(name), [donations, name]);
 
   const familyList: FamilyMember[] = crmData.family || [];
-  const donorNameList = React.useMemo(() => Object.keys(donors).sort((a, b) => a.localeCompare(b, 'he')), [donors]);
+  const donorNameList = React.useMemo(() => Object.keys(donors).filter(n => n !== name).sort((a, b) => a.localeCompare(b, 'he')), [donors, name]);
+  const familyMatches = familyLinkMode === 'link' && familyNameInput.trim()
+    ? donorNameList.filter(n => n.includes(familyNameInput.trim())).slice(0, 8)
+    : [];
 
   // מוסיף בן משפחה — או מקושר לאיש קשר אמיתי (קיים ברשימת אנשי הקשר), או רק שם חופשי בלי כרטיס
   const addFamilyMember = () => {
@@ -56,15 +62,27 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
     if (familyLinkMode === 'link' && !donors[nameVal]) return;
     const entry: FamilyMember = { id: `fam_${Date.now()}`, relation };
     if (familyLinkMode === 'link') entry.linkedName = nameVal;
-    else entry.freeName = nameVal;
+    else {
+      entry.freeName = nameVal;
+      if (familyBirthday) entry.birthday = familyBirthday;
+    }
     updateCrm(name, { family: [...familyList, entry] });
     setFamilyNameInput('');
     setFamilyRelation('');
+    setFamilyBirthday('');
     setIsAddFamilyOpen(false);
   };
 
   const removeFamilyMember = (id: string) => {
     updateCrm(name, { family: familyList.filter(f => f.id !== id) });
+  };
+
+  // עבור בן משפחה מקושר — מציג לנוחות את יום ההולדת שכבר רשום בכרטיס שלו (אם יש), בלי לכפול נתונים
+  const getLinkedBirthday = (linkedName: string): string | undefined => {
+    const linkedDonor = donors[linkedName];
+    if (!linkedDonor) return undefined;
+    const combined = { ...(linkedDonor as any), ...(crm[linkedName]?.customFields || {}) };
+    return findHebrewBirthday(combined) || findGregorianBirthday(combined);
   };
 
   const getHebrewPickerValue = (key: string): HebrewDateValue => {
@@ -357,7 +375,7 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A]">👪 משפחה</h3>
             <button
-              onClick={() => { setIsAddFamilyOpen(v => !v); setFamilyLinkMode('link'); setFamilyNameInput(''); setFamilyRelation(''); }}
+              onClick={() => { setIsAddFamilyOpen(v => !v); setFamilyLinkMode('link'); setFamilyNameInput(''); setFamilyRelation(''); setFamilyBirthday(''); }}
               className="bg-[#C9A84C]/10 text-[#9B7A2F] px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors hover:bg-[#C9A84C]/20"
             >
               <PlusCircle size={14} /> הוסף
@@ -368,18 +386,22 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
             <p className="text-xs text-gray-400 text-center py-2">אין עדיין בני משפחה רשומים.</p>
           ) : (
             <div className="space-y-2 mb-1">
-              {familyList.map(f => (
-                <div key={f.id} className="flex items-center justify-between gap-2 bg-[#FAF6EE] rounded-xl p-2.5 border border-[#EDE6D6]">
-                  <div className="min-w-0">
-                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">{f.relation}</span>
-                    <div className="text-sm font-bold text-[#0D1B2A] truncate flex items-center gap-1.5">
-                      {f.linkedName || f.freeName}
-                      {f.linkedName && <span className="text-[9px] font-normal bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full shrink-0">מקושר</span>}
+              {familyList.map(f => {
+                const displayBirthday = f.birthday || (f.linkedName ? getLinkedBirthday(f.linkedName) : undefined);
+                return (
+                  <div key={f.id} className="flex items-center justify-between gap-2 bg-[#FAF6EE] rounded-xl p-2.5 border border-[#EDE6D6]">
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">{f.relation}</span>
+                      <div className="text-sm font-bold text-[#0D1B2A] truncate flex items-center gap-1.5">
+                        {f.linkedName || f.freeName}
+                        {f.linkedName && <span className="text-[9px] font-normal bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full shrink-0">מקושר</span>}
+                      </div>
+                      {displayBirthday && <div className="text-[11px] text-gray-500 mt-0.5">🎂 {displayBirthday}</div>}
                     </div>
+                    <button onClick={() => removeFamilyMember(f.id)} className="shrink-0 text-red-300 hover:text-red-500 p-1"><X size={14} /></button>
                   </div>
-                  <button onClick={() => removeFamilyMember(f.id)} className="shrink-0 text-red-300 hover:text-red-500 p-1"><X size={14} /></button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -387,7 +409,7 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
             <div className="mt-3 pt-3 border-t border-dashed border-gray-100 space-y-2.5">
               <div className="flex bg-gray-100 p-1 rounded-xl">
                 <button
-                  onClick={() => { setFamilyLinkMode('link'); setFamilyNameInput(''); }}
+                  onClick={() => { setFamilyLinkMode('link'); setFamilyNameInput(''); setFamilyBirthday(''); }}
                   className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${familyLinkMode === 'link' ? 'bg-white shadow text-[#0D1B2A]' : 'text-gray-500'}`}
                 >קישור לאיש קשר קיים</button>
                 <button
@@ -396,20 +418,28 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
                 >רק שם (בלי כרטיס)</button>
               </div>
 
-              <div>
+              <div className="relative">
                 <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1">{familyLinkMode === 'link' ? 'איש קשר' : 'שם'}</label>
                 <input
                   type="text"
-                  list={familyLinkMode === 'link' ? 'family-donor-names' : undefined}
                   value={familyNameInput}
-                  onChange={e => setFamilyNameInput(e.target.value)}
-                  placeholder={familyLinkMode === 'link' ? 'הקלד שם איש קשר קיים...' : 'הקלד שם...'}
+                  onChange={e => { setFamilyNameInput(e.target.value); setFamilyDropdownOpen(true); }}
+                  onFocus={() => setFamilyDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setFamilyDropdownOpen(false), 150)}
+                  placeholder={familyLinkMode === 'link' ? 'הקלד אות או רצף אותיות מהשם...' : 'הקלד שם...'}
                   className="w-full border-[1.5px] border-[#EDE6D6] rounded-xl py-2.5 px-3.5 text-sm focus:border-[#C9A84C] outline-none"
                 />
-                {familyLinkMode === 'link' && (
-                  <datalist id="family-donor-names">
-                    {donorNameList.map(n => <option key={n} value={n} />)}
-                  </datalist>
+                {familyLinkMode === 'link' && familyDropdownOpen && familyMatches.length > 0 && (
+                  <div className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-[#EDE6D6] rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                    {familyMatches.map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onMouseDown={e => { e.preventDefault(); setFamilyNameInput(n); setFamilyDropdownOpen(false); }}
+                        className="w-full text-right px-3.5 py-2 text-sm text-[#0D1B2A] hover:bg-[#FAF6EE] border-b border-[#EDE6D6] last:border-0"
+                      >{n}</button>
+                    ))}
+                  </div>
                 )}
                 {familyLinkMode === 'link' && familyNameInput.trim() && !donors[familyNameInput.trim()] && (
                   <p className="text-[11px] text-red-500 mt-1">צריך לבחור איש קשר קיים מהרשימה, או לעבור ל"רק שם".</p>
@@ -430,6 +460,21 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
                   {['אמא', 'אבא', 'בעל', 'אישה', 'בן', 'בת', 'אח', 'אחות', 'סבא', 'סבתא'].map(r => <option key={r} value={r} />)}
                 </datalist>
               </div>
+
+              {familyLinkMode === 'free' && (
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1">🎂 יום הולדת (לא חובה)</label>
+                  <input
+                    type="date"
+                    value={toISOInputValue(familyBirthday)}
+                    onChange={e => setFamilyBirthday(fromISOInputValue(e.target.value))}
+                    className="w-full border-[1.5px] border-[#EDE6D6] rounded-xl py-2.5 px-3.5 text-sm focus:border-[#C9A84C] outline-none"
+                  />
+                </div>
+              )}
+              {familyLinkMode === 'link' && (
+                <p className="text-[11px] text-gray-400">יום הולדת של איש קשר מקושר מנוהל בכרטיס שלו עצמו, ומוצג כאן אוטומטית אם קיים.</p>
+              )}
 
               <button
                 onClick={addFamilyMember}
