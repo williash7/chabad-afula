@@ -38,7 +38,7 @@ export function MeetingModal({ donorName, onClose }: { donorName?: string; onClo
       if (res.error) {
         alert('שגיאה בשמירה: ' + res.error);
       } else {
-        logAction(10, 'מפגש נרשם');
+        logAction('meeting');
         refresh();
         onClose();
       }

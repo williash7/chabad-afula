@@ -7,6 +7,7 @@ import { QuickLogButtons } from './QuickLogButtons';
 import { computePersonalDateEvents } from '../lib/personalDates';
 import { inviteRemainingMinutes, toggleInvitePerson, STANDALONE_TASKS_ID, nextEventOccurrence, formatRemaining } from '../lib/tasks';
 import { getCustomHols } from '../lib/api';
+import { logAction } from '../lib/score';
 
 export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; addTrigger?: { tab: string; count: number } }) {
   const { holidayExtras, updateHolidayExtras, eventsData, updateEventsData, visibleDonors, crm, holidays } = useAppStore();
@@ -65,9 +66,11 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const openStandaloneCount = standaloneTasks.filter((t: any) => !t.done).length;
 
   const toggleStandaloneTask = (idx: number) => {
+    const wasDone = standaloneTasks[idx]?.done;
     const tasks = [...standaloneTasks];
     tasks[idx] = { ...tasks[idx], done: !tasks[idx].done };
     updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
+    if (!wasDone) logAction('task_complete');
   };
 
   const deleteStandaloneTask = (idx: number) => {
@@ -77,9 +80,11 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   };
 
   const toggleStandaloneInvitePerson = (idx: number, person: string) => {
+    const wasDone = (standaloneTasks[idx]?.doneNames || []).includes(person);
     const tasks = [...standaloneTasks];
     tasks[idx] = toggleInvitePerson(tasks[idx], person);
     updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
+    if (!wasDone) logAction('invite_done');
   };
 
   const addStandaloneTask = () => {
@@ -87,6 +92,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     const newTask: any = { text: standaloneText.trim(), done: false };
     if (standaloneDue) newTask.dueDate = standaloneDue;
     updateHolidayExtras(STANDALONE_TASKS_ID, { tasks: [...standaloneTasks, newTask] });
+    logAction('task_create');
     setStandaloneText('');
     setStandaloneDue('');
   };
@@ -98,8 +104,10 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
 
   const toggleHolidayTask = (holidayId: string, idx: number) => {
     const tasks = [...(holidayExtras[holidayId]?.tasks || [])];
+    const wasDone = tasks[idx]?.done;
     tasks[idx] = { ...tasks[idx], done: !tasks[idx].done };
     updateHolidayExtras(holidayId, { tasks });
+    if (!wasDone) logAction('task_complete');
   };
 
   const deleteHolidayTask = (holidayId: string, idx: number) => {
@@ -110,17 +118,22 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
 
   const toggleHolidayInvitePerson = (holidayId: string, idx: number, person: string) => {
     const tasks = [...(holidayExtras[holidayId]?.tasks || [])];
+    const wasDone = (tasks[idx]?.doneNames || []).includes(person);
     tasks[idx] = toggleInvitePerson(tasks[idx], person);
     updateHolidayExtras(holidayId, { tasks });
+    if (!wasDone) logAction('invite_done');
   };
 
   const toggleEventTask = (eventId: string, idx: number) => {
+    const ev = (eventsData as any[]).find((e: any) => e.id === eventId);
+    const wasDone = ev?.tasks?.[idx]?.done;
     updateEventsData((eventsData as any[]).map((e: any) => {
       if (e.id !== eventId) return e;
       const tasks = [...(e.tasks || [])];
       tasks[idx] = { ...tasks[idx], done: !tasks[idx].done };
       return { ...e, tasks };
     }));
+    if (!wasDone) logAction('task_complete');
   };
 
   const deleteEventTask = (eventId: string, idx: number) => {
@@ -133,12 +146,15 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   };
 
   const toggleEventInvitePerson = (eventId: string, idx: number, person: string) => {
+    const ev = (eventsData as any[]).find((e: any) => e.id === eventId);
+    const wasDone = (ev?.tasks?.[idx]?.doneNames || []).includes(person);
     updateEventsData((eventsData as any[]).map((e: any) => {
       if (e.id !== eventId) return e;
       const tasks = [...(e.tasks || [])];
       tasks[idx] = toggleInvitePerson(tasks[idx], person);
       return { ...e, tasks };
     }));
+    if (!wasDone) logAction('invite_done');
   };
 
   const submitAddTask = () => {
@@ -149,6 +165,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     } else {
       updateEventsData((eventsData as any[]).map((e: any) => e.id === addTarget.id ? { ...e, tasks: [...(e.tasks || []), { text: addText.trim(), done: false }] } : e));
     }
+    logAction('task_create');
     setAddText('');
     setAddTarget(null);
     setIsAddOpen(false);

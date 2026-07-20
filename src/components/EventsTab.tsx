@@ -3,6 +3,7 @@ import { useAppStore } from '../store/AppContext';
 import { Plus, Check, X, ClipboardList, Trash2, Pencil, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL, nextEventOccurrence, formatRemaining, createEventMediaTasks } from '../lib/tasks';
+import { logAction } from '../lib/score';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
 
 export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: number } } = {}) {
@@ -74,6 +75,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
         date: evDate,
         time: evTime,
       } : e));
+      logAction('event_edit');
     } else {
       const newEv = {
         id: `ev_${Date.now()}`,
@@ -86,6 +88,8 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
         tasks: createEventMediaTasks(),
       };
       updateEventsData([...eventsData, newEv]);
+      logAction('event_create');
+      logAction('task_create', createEventMediaTasks().length);
     }
     setIsAddingMode(false);
     setEditingEventId(null);
@@ -128,6 +132,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
       return e;
     });
     updateEventsData(updated);
+    logAction('attendance');
     setAttEventId(null);
   };
 
@@ -137,14 +142,17 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
   const toggleEventTask = (idx: number) => {
     if (!currentTasksEvent) return;
     const nextTasks = [...(currentTasksEvent.tasks || [])];
+    const wasDone = nextTasks[idx].done;
     nextTasks[idx] = { ...nextTasks[idx], done: !nextTasks[idx].done };
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+    if (!wasDone) logAction('task_complete');
   };
 
   const addEventTask = () => {
     if (!taskText.trim() || !currentTasksEvent) return;
     const nextTasks = [...(currentTasksEvent.tasks || []), { text: taskText.trim(), done: false }];
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+    logAction('task_create');
     setTaskText('');
   };
 
@@ -157,15 +165,18 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
 
   const toggleEventInvitePerson = (idx: number, person: string) => {
     if (!currentTasksEvent) return;
+    const wasDone = (currentTasksEvent.tasks?.[idx]?.doneNames || []).includes(person);
     const nextTasks = [...(currentTasksEvent.tasks || [])];
     nextTasks[idx] = toggleInvitePerson(nextTasks[idx], person);
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+    if (!wasDone) logAction('invite_done');
   };
 
   const addEventInviteTask = () => {
     if (!currentTasksEvent || donorNames.length === 0) return;
     const nextTasks = [...(currentTasksEvent.tasks || []), createInviteTask(currentTasksEvent.name, donorNames)];
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+    logAction('task_create');
   };
 
   const hasMediaTasks = (ev: any) => {
@@ -175,8 +186,10 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
 
   const addEventMediaTasks = () => {
     if (!currentTasksEvent || hasMediaTasks(currentTasksEvent)) return;
-    const nextTasks = [...(currentTasksEvent.tasks || []), ...createEventMediaTasks()];
+    const newTasks = createEventMediaTasks();
+    const nextTasks = [...(currentTasksEvent.tasks || []), ...newTasks];
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+    logAction('task_create', newTasks.length);
   };
 
   const donorNames = Object.keys(visibleDonors).filter(n => {
@@ -515,6 +528,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                    if (!result.tasks?.length) return;
                    const nextTasks = [...(currentTasksEvent.tasks || []), ...result.tasks.map(text => ({ text, done: false }))];
                    updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+                   logAction('task_create', result.tasks.length);
                  }}
                />
              </div>

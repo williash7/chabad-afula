@@ -26,7 +26,7 @@ export function QuickLogButtons({ donorName, compact = false }: { donorName: str
     const { apiPost } = await import('../lib/api');
     const dateStr = new Date().toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
     await apiPost('addMeeting', { name: donorName, date: dateStr, meetType, purpose: '', notes: '' });
-    logAction(10, 'מפגש נרשם');
+    logAction('meeting');
     refresh();
   };
 

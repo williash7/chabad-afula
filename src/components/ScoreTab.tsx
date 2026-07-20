@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { computeLastContactByName } from '../lib/contactFocus';
-import { getScoreSnapshot, SCORE_ACTION_EVENT } from '../lib/score';
-import { TrendingUp, Flame } from 'lucide-react';
+import { getScoreSnapshot, backfillLastWeek, POINT_RULES, SCORE_ACTION_EVENT } from '../lib/score';
+import { TrendingUp, Flame, ChevronDown, Info } from 'lucide-react';
 
 export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) => void } = {}) {
   const { visibleDonors, donations } = useAppStore();
   const [toast, setToast] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -17,6 +18,18 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
     };
     window.addEventListener(SCORE_ACTION_EVENT, handler);
     return () => window.removeEventListener(SCORE_ACTION_EVENT, handler);
+  }, []);
+
+  // גיבוי חד-פעמי: נותן נקודות רטרואקטיביות על תרומות/מפגשים מהשבוע האחרון
+  // (לא רץ פעם שנייה — הפונקציה עצמה שומרת סימון ב-localStorage)
+  useEffect(() => {
+    const result = backfillLastWeek(donations);
+    if (result && result.count > 0) {
+      setToast(`עודכן ניקוד רטרואקטיבי: +${result.points} נקודות מ-${result.count} פעולות השבוע האחרון`);
+      setTimeout(() => setToast(null), 4000);
+      setTick(t => t + 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const today = useMemo(() => new Date(), [tick]);
@@ -138,6 +151,30 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* טבלת ניקוד — מידע: כמה שווה כל פעולה */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <button onClick={() => setIsInfoOpen(v => !v)} className="w-full flex items-center justify-between p-4">
+            <span className="text-sm font-bold text-gray-400 uppercase tracking-wide flex items-center gap-2"><Info size={15} /> טבלת ניקוד — כמה שווה כל פעולה</span>
+            <ChevronDown size={16} className={`text-gray-400 transition-transform ${isInfoOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {isInfoOpen && (
+            <div className="px-4 pb-4 space-y-1.5">
+              {Object.entries(POINT_RULES).map(([key, rule]) => (
+                <div key={key} className="flex items-center justify-between gap-2 bg-[#FAF6EE] rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${rule.category === 'execution' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {rule.category === 'execution' ? 'ביצוע' : 'תכנון'}
+                    </span>
+                    <span className="text-sm text-[#0D1B2A] truncate">{rule.label}</span>
+                  </div>
+                  <span className="shrink-0 text-sm font-bold text-[#C9A84C]">+{rule.points}</span>
+                </div>
+              ))}
+              <p className="text-[10px] text-gray-400 pt-1">פעולות "ביצוע" (השלמה בפועל) שוות יותר מפעולות "תכנון" (יצירה מראש). כמה משימות/הזמנות שנוספות יחד (למשל דרך תכנון AI) מנוקדות לפי מספרן.</p>
             </div>
           )}
         </div>

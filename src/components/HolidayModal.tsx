@@ -3,6 +3,7 @@ import { useAppStore } from '../store/AppContext';
 import { createHolidayDoc } from '../lib/api';
 import { X, Check, MessageSquare, FileText, ExternalLink, Loader2, Download, ClipboardList } from 'lucide-react';
 import { createInviteTask, inviteRemainingMinutes, toggleInvitePerson, MINUTES_PER_CALL } from '../lib/tasks';
+import { logAction } from '../lib/score';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
 
 export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () => void }) {
@@ -121,14 +122,17 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
 
   const toggleTask = (idx: number) => {
     const nextTasks = [...(extra.tasks || [])];
+    const wasDone = nextTasks[idx].done;
     nextTasks[idx].done = !nextTasks[idx].done;
     updateHolidayExtras(id, { tasks: nextTasks });
+    if (!wasDone) logAction('task_complete');
   };
 
   const addTask = () => {
     if (!addTaskText.trim()) return;
     const nextTasks = [...(extra.tasks || []), { text: addTaskText.trim(), done: false }];
     updateHolidayExtras(id, { tasks: nextTasks });
+    logAction('task_create');
     setAddTaskText('');
   };
 
@@ -393,9 +397,11 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
                         <button
                           key={p}
                           onClick={() => {
+                            const wasDone = (t.doneNames || []).includes(p);
                             const nextTasks = [...extra.tasks];
                             nextTasks[i] = toggleInvitePerson(t, p);
                             updateHolidayExtras(id, { tasks: nextTasks });
+                            if (!wasDone) logAction('invite_done');
                           }}
                           className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${isDone ? 'bg-[#D1FAE5] border-[#10B981] text-[#065F46] line-through' : 'bg-[#FAF6EE] border-[#EDE6D6] text-[#0D1B2A]'}`}
                         >
@@ -442,6 +448,7 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
               let nextReminders = extra.reminders || [];
               if (result.reminders?.length) nextReminders = [...nextReminders, ...result.reminders.map(r => ({ title: r.title, days: String(r.days), wa: false }))];
               updateHolidayExtras(id, { tasks: nextTasks, budget: nextBudget, reminders: nextReminders });
+              if (result.tasks?.length) logAction('task_create', result.tasks.length);
             }}
           />
         </div>
@@ -470,6 +477,7 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
                   onClick={() => {
                     const nextTasks = [...(extra.tasks || []), createInviteTask(holiday.name, invitees.map((d: any) => d.name))];
                     updateHolidayExtras(id, { tasks: nextTasks });
+                    logAction('task_create');
                     alert(`נוספה משימה: הזמנת ${invitees.length} אנשים (≈ ${invitees.length * MINUTES_PER_CALL} דקות שיחות טלפון). אפשר לעקוב אחריה בכרטיסיית "משימות" ⬅ "משימות חג".`);
                   }}
                   disabled={invitees.length === 0}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { getCustomHols, saveCustomHols } from '../lib/api';
+import { logAction } from '../lib/score';
 import { Plus, CalendarDays } from 'lucide-react';
 import { HolidayModal } from './HolidayModal';
 
@@ -24,6 +25,7 @@ export function CalendarTab({ addTrigger }: { addTrigger?: { tab: string; count:
       const updated = [...customHolidays, { name, date, desc }];
       setCustomHolidays(updated);
       saveCustomHols(updated);
+      logAction('holiday_custom');
     }
     setIsAdding(false);
   };

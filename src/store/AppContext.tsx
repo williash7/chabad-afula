@@ -260,7 +260,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         },
       };
     });
-    logAction(15, 'תרומה מתועדת');
+    logAction('donation');
   };
 
   const updateCrm = (name: string, data: any) => {
@@ -269,7 +269,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       saveCRMDataCloud(next);
       return next;
     });
-    logAction(10, 'עדכון איש קשר');
+    logAction('contact_update');
   };
 
   // ממזג שני שמות (למשל "אברהם אריאל" ו"אברהם אריאל ציגנוב") לאיש קשר אחד.
