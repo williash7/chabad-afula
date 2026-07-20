@@ -76,8 +76,49 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
     const label = prompt('עבור מי היארצייט? (למשל: אב, אם, בעל, אישה)');
     if (!label || !label.trim()) return;
     const key = `יארצייט (${label.trim()})`;
-    if (editedFields[key] !== undefined) return;
-    setEditedFields(prev => ({ ...prev, [key]: '' }));
+    const gregKey = gregorianPairFor(key);
+    // מוסיפים גם את השדה העברי וגם את הלועזי המקביל יחד, כדי שאפשר יהיה
+    // להזין ישר מכל כיוון (עברי או לועזי) בלי צעד נוסף.
+    setEditedFields(prev => ({
+      ...prev,
+      [key]: prev[key] ?? '',
+      [gregKey]: prev[gregKey] ?? '',
+    }));
+  };
+
+  // מאפשר לתת שם ("של מי היארצייט") לכל שדה יארצייט — כולל השדה הכללי
+  // שקיים כברירת מחדל — ומעביר את הערך (עברי+לועזי) לשם החדש יחד.
+  const renameYahrzeitField = (currentKey: string) => {
+    const existingLabelMatch = currentKey.match(/\(([^)]+)\)\s*(?:\(לועזי\))?$/);
+    const existingLabel = existingLabelMatch && existingLabelMatch[1] !== 'לועזי' ? existingLabelMatch[1] : '';
+    const label = prompt('עבור מי היארצייט? (למשל: אב, אם, בעל, אישה)', existingLabel);
+    if (!label || !label.trim()) return;
+
+    const isHeb = isHebrewStyleDateKey(currentKey);
+    const hebKey = isHeb ? currentKey : hebrewPairFor(currentKey);
+    const gregKey = isHeb ? gregorianPairFor(currentKey) : currentKey;
+    const newHebKey = `יארצייט (${label.trim()})`;
+    const newGregKey = gregorianPairFor(newHebKey);
+    if (newHebKey === hebKey) return;
+
+    setEditedFields(prev => {
+      const next = { ...prev };
+      const hebValue = next[hebKey] || '';
+      const gregValue = next[gregKey] || '';
+      delete next[hebKey];
+      delete next[gregKey];
+      next[newHebKey] = hebValue;
+      next[newGregKey] = gregValue;
+      return next;
+    });
+    setHebrewPickerValues(prev => {
+      if (!prev[hebKey]) return prev;
+      const next = { ...prev };
+      const val = next[hebKey];
+      delete next[hebKey];
+      next[newHebKey] = val;
+      return next;
+    });
   };
 
   const toISOInputValue = (ddmmyyyy: string): string => {
@@ -368,7 +409,7 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
                   init[k] = (combined as any)[k] || '';
                 });
                 // Ensure common fields are at least suggested if missing
-                const common = ['טלפון', 'כתובת', 'תאריך לידה', 'תאריך לידה עברי', 'יארצייט', 'שם זוג', 'תפילין', 'מזוזות'];
+                const common = ['טלפון', 'כתובת', 'תאריך לידה', 'תאריך לידה עברי', 'יארצייט', 'יארצייט (לועזי)', 'שם זוג', 'תפילין', 'מזוזות'];
                 common.forEach(c => {
                   if (init[c] === undefined) init[c] = '';
                 });
@@ -447,17 +488,26 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
                       <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wide group-focus-within:text-[#C9A84C] transition-colors">
                         {key} {isDateField && (isYahrzeitKey(key) ? '🕯️' : '🎂')}
                       </label>
-                      {/* Only allow deleting non-standard fields in UI if they are empty */}
-                      {!editedFields[key] && !['טלפון', 'כתובת'].includes(key) && (
-                        <button
-                          onClick={() => {
-                            const next = { ...editedFields };
-                            delete next[key];
-                            setEditedFields(next);
-                          }}
-                          className="text-[10px] text-red-300 hover:text-red-500"
-                        >מחק</button>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isYahrzeitKey(key) && (
+                          <button
+                            onClick={() => renameYahrzeitField(key)}
+                            title="לשנות עבור מי היארצייט הזה"
+                            className="text-[10px] text-[#9B7A2F] hover:text-[#0D1B2A]"
+                          >✏️ של מי</button>
+                        )}
+                        {/* Only allow deleting non-standard fields in UI if they are empty */}
+                        {!editedFields[key] && !['טלפון', 'כתובת'].includes(key) && (
+                          <button
+                            onClick={() => {
+                              const next = { ...editedFields };
+                              delete next[key];
+                              setEditedFields(next);
+                            }}
+                            className="text-[10px] text-red-300 hover:text-red-500"
+                          >מחק</button>
+                        )}
+                      </div>
                     </div>
 
                     {isHebrewField ? (
