@@ -9,6 +9,7 @@ import {
 import { Donor, Donation, ReportSummary } from '../types';
 import { extractMerges, applyMergesToCrm, coalesceDonorsByMerges, resolveCanonicalName, MERGES_KEY } from '../lib/nameMerges';
 import { AppSettings, loadSettings, saveSettings, filterDonorsBySettings } from '../lib/settings';
+import { logAction } from '../lib/score';
 
 interface AppState {
   summary: ReportSummary | null;
@@ -259,6 +260,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         },
       };
     });
+    logAction(15, 'תרומה מתועדת');
   };
 
   const updateCrm = (name: string, data: any) => {
@@ -267,6 +269,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       saveCRMDataCloud(next);
       return next;
     });
+    logAction(10, 'עדכון איש קשר');
   };
 
   // ממזג שני שמות (למשל "אברהם אריאל" ו"אברהם אריאל ציגנוב") לאיש קשר אחד.

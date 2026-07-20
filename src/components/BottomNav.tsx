@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, CalendarDays, PieChart, CalendarCheck, Settings, ClipboardList } from 'lucide-react';
+import { Home, Users, CalendarDays, PieChart, CalendarCheck, Settings, ClipboardList, TrendingUp } from 'lucide-react';
 
 interface BottomNavProps {
   currentTab: string;
@@ -10,6 +10,7 @@ export function BottomNav({ currentTab, setTab }: BottomNavProps) {
   const navItems = [
     { id: 'home', icon: Home, label: 'דשבורד' },
     { id: 'tasks', icon: ClipboardList, label: 'משימות' },
+    { id: 'score', icon: TrendingUp, label: 'ניקוד' },
     { id: 'donors', icon: Users, label: 'אנשי קשר' },
     { id: 'events', icon: CalendarCheck, label: 'אירועים' },
     { id: 'calendar', icon: CalendarDays, label: 'חגים' },

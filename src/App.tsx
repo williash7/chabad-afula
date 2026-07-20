@@ -11,7 +11,9 @@ import { ReportsTab } from './components/ReportsTab';
 import { PosterTab } from './components/PosterTab';
 import { SettingsTab } from './components/SettingsTab';
 import { TasksTab } from './components/TasksTab';
+import { ScoreTab } from './components/ScoreTab';
 import { DonationModal } from './components/DonationModal';
+import { ProfileModal } from './components/ProfileModal';
 import { Plus } from 'lucide-react';
 
 // תווית לכפתור "+" הגלובלי (FAB במובייל, "הוסף X" בסיידבר) לפי המסך הפעיל.
@@ -28,6 +30,7 @@ function AppContent() {
   const { loading, loadingText, apiError } = useAppStore();
   const [activeTab, setActiveTab] = useState('home');
   const [isDonationOpen, setIsDonationOpen] = useState(false);
+  const [scoreOpenContact, setScoreOpenContact] = useState<string | null>(null);
   // { tab, count } — לחיצה על "+" הגלובלי מעדכנת את זה, וכל מסך שמאזין (donors/tasks/events/calendar)
   // פותח את מודל ההוספה שלו כשה-tab תואם לו. count משתנה בכל לחיצה כדי שאפשר יהיה לפתוח שוב אחרי סגירה.
   const [addTrigger, setAddTrigger] = useState<{ tab: string; count: number }>({ tab: '', count: 0 });
@@ -64,6 +67,7 @@ function AppContent() {
           {activeTab === 'reports' && <ReportsTab />}
           {activeTab === 'poster' && <PosterTab onClose={() => setActiveTab('home')} />}
           {activeTab === 'tasks' && <TasksTab setTab={setActiveTab} addTrigger={addTrigger} />}
+          {activeTab === 'score' && <ScoreTab onContactClick={setScoreOpenContact} />}
           {activeTab === 'settings' && <SettingsTab />}
         </main>
       </div>
@@ -83,6 +87,7 @@ function AppContent() {
       )}
 
       {isDonationOpen && <DonationModal onClose={() => setIsDonationOpen(false)} />}
+      {scoreOpenContact && <ProfileModal name={scoreOpenContact} onClose={() => setScoreOpenContact(null)} />}
     </div>
   );
 }
