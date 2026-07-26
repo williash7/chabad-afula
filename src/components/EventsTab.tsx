@@ -145,15 +145,24 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
     if (newlyPresent.length > 0 && ev) {
       try {
         const { apiPost } = await import('../lib/api');
-        await Promise.all(newlyPresent.map(name =>
+        const results = await Promise.all(newlyPresent.map(name =>
           apiPost('addMeeting', {
             name,
             date: dateKey,
             meetType: 'נוכחות באירוע',
             purpose: ev.name || '',
             notes: `נוכחות באירוע: ${ev.name || ''}`,
-          }).catch(err => console.error('addMeeting failed for', name, err))
+            nextMeet: ''
+          }).then(res => ({ name, res }))
         ));
+        // apiPost תמיד "מצליח" מבחינת ה-Promise (הוא בולע שגיאות רשת
+        // בעצמו) — לכן חובה לבדוק את res.error בפועל, אחרת כשל בשמירה
+        // בשרת פשוט לא נראה בכלל.
+        const failed = results.filter(r => r.res?.error);
+        if (failed.length > 0) {
+          console.error('addMeeting failed for:', failed);
+          alert(`הנוכחות נשמרה, אך רישום יצירת קשר נכשל עבור: ${failed.map(f => f.name).join(', ')}`);
+        }
         refresh();
       } catch (err) {
         console.error('Error logging attendance as contact:', err);

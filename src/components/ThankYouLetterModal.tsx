@@ -12,66 +12,71 @@ interface Props {
 }
 
 type Lang = 'he' | 'en' | 'ru';
+type Gender = 'm' | 'f';
+
+// שם החתימה והארגון — המכתב הוא אישית מהרב אשר וילהלם, מטעם חב"ד בעליה עפולה.
+const SIGNER = { he: 'הרב אשר וילהלם', en: 'Rabbi Asher Wilhelm', ru: 'Раввин Ашер Вильгельм' };
+const ORG = { he: 'חב"ד בעליה עפולה', en: 'Chabad BaAliya Afula', ru: 'Хабад ба-Алия Афула' };
 
 // טקסטים מתורגמים לתוכן המכתב עצמו (כרטיס העיצוב + הודעת השיתוף). ממשק
 // המודל (כפתורים, תוויות השדות) נשאר בעברית בכוונה, כמו בשאר האפליקציה —
-// רק תוכן המכתב שנשלח לתורם משתנה לפי השפה הנבחרת.
+// רק תוכן המכתב שנשלח לתורם משתנה לפי השפה הנבחרת. ברוסית יש גם בחירת
+// פנייה בזכר/נקבה, כי לשון הפנייה שונה משמעותית ("Уважаемый" מול "Уважаемая").
 const LETTER_TEXT: Record<Lang, {
   dir: 'rtl' | 'ltr';
   locale: string;
   certTitle: string;
-  toLabel: string;
+  toLabel: (g: Gender) => string;
   thanksLine: string;
   regards: string;
-  team: string;
-  body: (donorName: string, amount: number, date: string) => string;
+  body: (donorName: string, amount: number, date: string, g: Gender) => string;
 }> = {
   he: {
     dir: 'rtl',
     locale: 'he-IL',
     certTitle: 'תעודת הוקרה ותודה',
-    toLabel: 'לכבוד',
-    thanksLine: 'על תרומתך הנדיבה, המוקדשת מעומק הלב לטובת פעילות בית חב"ד עפולה והקהילה',
+    toLabel: () => 'לכבוד',
+    thanksLine: `על תרומתך הנדיבה, המוקדשת מעומק הלב לטובת פעילות ${ORG.he} והקהילה`,
     regards: 'בברכה,',
-    team: 'צוות בית חב"ד עפולה',
     body: (donorName, amount, date) =>
-      `לכבוד ${donorName},\n\nברצוננו להביע תודה עמוקה על תרומתך הנדיבה בסך ₪${amount.toLocaleString()}, שהתקבלה בתאריך ${date}.\nתרומתך תורמת רבות לפעילות בית חב"ד עפולה ולקהילה כולה.\nיהי רצון שתתברך/י בכל הברכות הטובות!\n\nבברכה,\nצוות בית חב"ד עפולה`,
+      `לכבוד ${donorName},\n\nברצוני להביע תודה עמוקה על תרומתך הנדיבה בסך ₪${amount.toLocaleString()}, שהתקבלה בתאריך ${date}.\nתרומתך תורמת רבות לפעילות ${ORG.he} ולקהילה כולה.\nיהי רצון שתתברך/י בכל הברכות הטובות!\n\nבברכה,\n${SIGNER.he}\n${ORG.he}`,
   },
   en: {
     dir: 'ltr',
     locale: 'en-US',
     certTitle: 'Certificate of Appreciation',
-    toLabel: 'Dear',
-    thanksLine: 'For your generous donation, given wholeheartedly in support of Chabad Afula and our community',
+    toLabel: () => 'Dear',
+    thanksLine: `For your generous donation, given wholeheartedly in support of ${ORG.en} and our community`,
     regards: 'Warm regards,',
-    team: 'The Chabad Afula Team',
     body: (donorName, amount, date) =>
-      `Dear ${donorName},\n\nWe want to express our deep gratitude for your generous donation of ₪${amount.toLocaleString()}, received on ${date}.\nYour contribution greatly supports the activities of Chabad Afula and the entire community.\nMay you be blessed with all good blessings!\n\nWarm regards,\nThe Chabad Afula Team`,
+      `Dear ${donorName},\n\nI want to express my deep gratitude for your generous donation of ₪${amount.toLocaleString()}, received on ${date}.\nYour contribution greatly supports the activities of ${ORG.en} and the entire community.\nMay you be blessed with all good blessings!\n\nWarm regards,\n${SIGNER.en}\n${ORG.en}`,
   },
   ru: {
     dir: 'ltr',
     locale: 'ru-RU',
     certTitle: 'Благодарственная грамота',
-    toLabel: 'Уважаем(ый/ая)',
-    thanksLine: 'За ваше щедрое пожертвование от всего сердца в поддержку общины Хабад Афула',
+    toLabel: (g) => (g === 'f' ? 'Уважаемая' : 'Уважаемый'),
+    thanksLine: `За ваше щедрое пожертвование от всего сердца в поддержку ${ORG.ru} и нашей общины`,
     regards: 'С уважением,',
-    team: 'Команда Хабад Афула',
-    body: (donorName, amount, date) =>
-      `Уважаем(ый/ая) ${donorName},\n\nМы хотим выразить глубокую благодарность за ваше щедрое пожертвование в размере ₪${amount.toLocaleString()}, полученное ${date}.\nВаш вклад значительно поддерживает деятельность общины Хабад Афула и всей общины.\nПусть вас благословят во всем!\n\nС уважением,\nКоманда Хабад Афула`,
+    body: (donorName, amount, date, g) =>
+      `${g === 'f' ? 'Уважаемая' : 'Уважаемый'} ${donorName},\n\nЯ хочу выразить глубокую благодарность за ваше щедрое пожертвование в размере ₪${amount.toLocaleString()}, полученное ${date}.\nВаш вклад значительно поддерживает деятельность ${ORG.ru} и всей общины.\nПусть вас благословят во всём!\n\nС уважением,\n${SIGNER.ru}\n${ORG.ru}`,
   },
 };
 
 // מכתב תודה מעוצב (תעודת הוקרה) לתרומה ספציפית — שם, סכום ותאריך מתעדכנים
-// אוטומטית מהתרומה שממנה נפתח. אפשר לבחור שפת תוכן (עברית/אנגלית/רוסית),
-// להוריד כתמונה, לשתף בוואטסאפ (Web Share עם קובץ במובייל, ואם לא נתמך —
-// הורדה + פתיחת שיחת וואטסאפ עם טקסט) או לשלוח במייל (mailto עם נושא וגוף
-// מוכנים; יש לצרף את התמונה שהורדה ידנית, כי לינק mailto לא יכול לצרף
-// קבצים בדפדפן).
+// אוטומטית מהתרומה שממנה נפתח. אפשר לבחור שפת תוכן (עברית/אנגלית/רוסית;
+// ברוסית גם זכר/נקבה), להוריד כתמונה, לשתף בוואטסאפ או לשלוח במייל.
+//
+// וואטסאפ: אם הוזן מספר טלפון, נפתח תמיד קישור ישיר לצ'אט של אותו מספר
+// (wa.me/<טלפון>) עם הטקסט מוכן מראש, ובמקביל התמונה יורדת למכשיר לצירוף
+// ידני (קישורי wa.me לא תומכים בצירוף קובץ). אם לא הוזן טלפון כלל, נעשה
+// שימוש ב-Web Share API (בחירת אפליקציה/איש קשר ידנית) כי אין למי לקשר.
 //
 // לוגו: כדי להציג תמונת לוגו במקום העיגול עם "ח", יש לשמור קובץ תמונה
 // בשם "logo.png" בתיקיית public/ (כלומר בנתיב public/logo.png). האפליקציה
-// טוענת אותו אוטומטית מהנתיב "/logo.png"; אם הקובץ לא קיים, מוצג העיגול
-// הדקורטיבי הרגיל כברירת מחדל.
+// טוענת אותו אוטומטית תוך התחשבות בנתיב הבסיס של האתר (import.meta.env.BASE_URL,
+// למשל "/chabad-afula/logo.png" בפריסה ב-GitHub Pages); אם הקובץ לא קיים,
+// מוצג העיגול הדקורטיבי הרגיל כברירת מחדל.
 export function ThankYouLetterModal({ donorName, amount, date, phone, email, onClose }: Props) {
   const letterRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState<'download' | 'whatsapp' | 'email' | null>(null);
@@ -79,20 +84,24 @@ export function ThankYouLetterModal({ donorName, amount, date, phone, email, onC
   const [phoneInput, setPhoneInput] = useState(phone || '');
   const [downloaded, setDownloaded] = useState(false);
   const [lang, setLang] = useState<Lang>('he');
+  const [gender, setGender] = useState<Gender>('m');
   const [logoOk, setLogoOk] = useState(true);
 
   const t = LETTER_TEXT[lang];
+  const logoSrc = `${import.meta.env.BASE_URL}logo.png`;
 
   const today = new Date();
   const displayDate = date || today.toLocaleDateString(t.locale);
 
-  const bodyText = t.body(donorName, amount, displayDate);
+  const bodyText = t.body(donorName, amount, displayDate, gender);
 
   const renderImage = async (): Promise<string> => {
     if (!letterRef.current) throw new Error('no ref');
+    // חשוב: לא להעביר width/height כאן — אלו אפשרויות של html-to-image
+    // שמאלצות שינוי גודל בפועל של האלמנט *לפני* הצילום (לא רק גודל הפלט),
+    // מה שגרם למכתב להיראות זעיר עם המסגרת "בורחת" הצידה. pixelRatio לבדו
+    // מספיק כדי לקבל תמונה חדה, בהתאם לגודל האמיתי של האלמנט (450x638).
     return toPng(letterRef.current, {
-      width: 900,
-      height: 1276,
       pixelRatio: 2,
       backgroundColor: '#FAF6EE',
       fontEmbedCSS: '',
@@ -123,29 +132,43 @@ export function ThankYouLetterModal({ donorName, amount, date, phone, email, onC
     setBusy('whatsapp');
     try {
       const dataUrl = await renderImage();
+
+      let p = (phoneInput || '').replace(/\D/g, '');
+      if (p && p.startsWith('0')) p = '972' + p.substring(1);
+
+      if (p) {
+        // יש מספר טלפון של התורם — מורידים את התמונה לצירוף ידני, ופותחים
+        // קישור ישיר לצ'אט הוואטסאפ של אותו מספר בדיוק (לא חלונית שיתוף
+        // כללית), כדי שהשליחה תהיה מקושרת ישירות לתורם.
+        const link = document.createElement('a');
+        link.download = `מכתב-תודה-${donorName}.png`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setDownloaded(true);
+
+        window.open(`https://wa.me/${p}?text=${encodeURIComponent(bodyText)}`, '_blank');
+        return;
+      }
+
+      // אין מספר טלפון בכלל — אין למי לקשר ישירות, אז נשתמש ב-Web Share
+      // (אם נתמך) כדי לפחות לאפשר בחירת איש קשר/אפליקציה עם התמונה מצורפת.
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], `todah-${donorName}.png`, { type: 'image/png' });
-
-      // Web Share API עם קובץ — עובד בעיקר בדפדפני מובייל, ופותח את חלונית
-      // השיתוף המערכתית שבה אפשר לבחור WhatsApp ישירות עם התמונה מצורפת.
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: 'מכתב תודה', text: bodyText });
         return;
       }
 
-      // נפילה חזרה: מורידים את התמונה למכשיר ופותחים שיחת וואטסאפ עם הטקסט
-      // (יש לצרף את התמונה שהורדה ידנית, כי לינק wa.me לא תומך בצירוף קבצים).
       const link = document.createElement('a');
       link.download = `מכתב-תודה-${donorName}.png`;
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      let p = (phoneInput || '').replace(/\D/g, '');
-      if (p && p.startsWith('0')) p = '972' + p.substring(1);
-      const url = p ? `https://wa.me/${p}?text=${encodeURIComponent(bodyText)}` : `https://wa.me/?text=${encodeURIComponent(bodyText)}`;
-      window.open(url, '_blank');
+      setDownloaded(true);
+      window.open(`https://wa.me/?text=${encodeURIComponent(bodyText)}`, '_blank');
     } catch (e) {
       console.error(e);
       alert('שגיאה בשיתוף');
@@ -202,6 +225,27 @@ export function ThankYouLetterModal({ donorName, amount, date, phone, email, onC
             </div>
           </div>
 
+          {/* Russian gender selector — only relevant when Russian is selected */}
+          {lang === 'ru' && (
+            <div className="mb-3">
+              <label className="block text-[11px] font-bold text-gray-500 mb-1">פנייה (זכר / נקבה)</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setGender('m')}
+                  className={`flex-1 py-2 px-3 rounded-xl border text-sm font-bold transition-colors ${gender === 'm' ? 'bg-[#C9A84C] text-white border-[#C9A84C]' : 'bg-white text-gray-600 border-[#EDE6D6] hover:border-[#C9A84C]'}`}
+                >
+                  זכר — Уважаемый
+                </button>
+                <button
+                  onClick={() => setGender('f')}
+                  className={`flex-1 py-2 px-3 rounded-xl border text-sm font-bold transition-colors ${gender === 'f' ? 'bg-[#C9A84C] text-white border-[#C9A84C]' : 'bg-white text-gray-600 border-[#EDE6D6] hover:border-[#C9A84C]'}`}
+                >
+                  נקבה — Уважаемая
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Letter preview / capture target */}
           <div className="rounded-2xl overflow-hidden border border-[#EDE6D6] shadow-sm">
             <div
@@ -216,7 +260,7 @@ export function ThankYouLetterModal({ donorName, amount, date, phone, email, onC
               <div className="relative z-10 flex flex-col items-center pt-4">
                 {logoOk ? (
                   <img
-                    src="/logo.png"
+                    src={logoSrc}
                     alt="לוגו"
                     onError={() => setLogoOk(false)}
                     className="w-14 h-14 rounded-full object-cover shadow-md"
@@ -227,13 +271,13 @@ export function ThankYouLetterModal({ donorName, amount, date, phone, email, onC
                     ח
                   </div>
                 )}
-                <div className="font-['Frank_Ruhl_Libre'] text-sm font-bold text-[#9B7A2F] mt-2">בית חב"ד עפולה</div>
+                <div className="font-['Frank_Ruhl_Libre'] text-sm font-bold text-[#9B7A2F] mt-2">{ORG[lang]}</div>
               </div>
 
               <div className="relative z-10 text-center flex-1 flex flex-col items-center justify-center gap-4 px-2">
                 <div className="font-['Frank_Ruhl_Libre'] text-2xl font-black text-[#0D1B2A]">{t.certTitle}</div>
                 <div className="text-sm text-[#3a3a3a] leading-relaxed">
-                  {t.toLabel}<br />
+                  {t.toLabel(gender)}<br />
                   <span className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] block mt-1 break-words max-w-[320px] mx-auto">{donorName}</span>
                 </div>
                 <div className="text-xs text-[#5a5a5a] leading-relaxed max-w-[320px]">
@@ -245,7 +289,8 @@ export function ThankYouLetterModal({ donorName, amount, date, phone, email, onC
 
               <div className="relative z-10 text-center pb-2">
                 <div className="text-xs text-[#5a5a5a]">{t.regards}</div>
-                <div className="font-['Frank_Ruhl_Libre'] text-sm font-bold text-[#0D1B2A]">{t.team}</div>
+                <div className="font-['Frank_Ruhl_Libre'] text-sm font-bold text-[#0D1B2A]">{SIGNER[lang]}</div>
+                <div className="text-[10px] text-[#8a8a8a] mt-0.5">{ORG[lang]}</div>
               </div>
             </div>
           </div>

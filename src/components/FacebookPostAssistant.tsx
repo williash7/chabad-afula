@@ -46,7 +46,7 @@ export function FacebookPostAssistant({ event, fbPageId, fbAccessToken }: Facebo
 
     let p = '';
     if (mode === 'pre') {
-      p = `אתה מנהל תוכן עבור בית חב"ד עפולה. הקהל הוא דוברי רוסית (עולים מברית המועצות לשעבר) שחיים בעפולה, ישראל.
+      p = `אתה מנהל תוכן עבור חב"ד בעליה עפולה. הקהל הוא דוברי רוסית (עולים מברית המועצות לשעבר) שחיים בעפולה, ישראל.
 
 כתוב עבורי שני טקסטים נפרדים:
 
@@ -69,7 +69,7 @@ export function FacebookPostAssistant({ event, fbPageId, fbAccessToken }: Facebo
 }
 \`\`\``;
     } else {
-      p = `אתה מנהל תוכן עבור בית חב"ד עפולה. הקהל הוא דוברי רוסית.
+      p = `אתה מנהל תוכן עבור חב"ד בעליה עפולה. הקהל הוא דוברי רוסית.
 
 האירוע "${event.name}" (${eventType}) התקיים ב-${dateStr}.
 ${attendeeCount ? `השתתפו: ${attendeeCount} אנשים.` : ''}

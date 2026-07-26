@@ -195,15 +195,21 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
     if (newlyPresent.length > 0) {
       try {
         const { apiPost } = await import('../lib/api');
-        await Promise.all(newlyPresent.map(name =>
+        const results = await Promise.all(newlyPresent.map(name =>
           apiPost('addMeeting', {
             name,
             date: dateKey,
             meetType: 'נוכחות בחג',
             purpose: holiday.name || '',
             notes: `נוכחות בחג: ${holiday.name || ''}`,
-          }).catch(err => console.error('addMeeting failed for', name, err))
+            nextMeet: ''
+          }).then(res => ({ name, res }))
         ));
+        const failed = results.filter(r => r.res?.error);
+        if (failed.length > 0) {
+          console.error('addMeeting failed for:', failed);
+          alert(`הנוכחות נשמרה, אך רישום יצירת קשר נכשל עבור: ${failed.map(f => f.name).join(', ')}`);
+        }
         refresh();
       } catch (err) {
         console.error('Error logging holiday attendance as contact:', err);
@@ -483,14 +489,20 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
                               try {
                                 const { apiPost } = await import('../lib/api');
                                 const dateKey = new Date().toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                                await apiPost('addMeeting', {
+                                const res = await apiPost('addMeeting', {
                                   name: p,
                                   date: dateKey,
                                   meetType: 'טלפון',
                                   purpose: `הזמנה ל${holiday.name}`,
                                   notes: `הוזמן/ה לחג: ${holiday.name}`,
+                                  nextMeet: ''
                                 });
-                                refresh();
+                                if (res?.error) {
+                                  console.error('addMeeting failed for', p, res);
+                                  alert(`רישום יצירת הקשר עבור ${p} נכשל: ${res.error}`);
+                                } else {
+                                  refresh();
+                                }
                               } catch (err) {
                                 console.error('Error logging invite as contact:', err);
                               }

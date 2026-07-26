@@ -1,10 +1,64 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Settings as SettingsIcon, RotateCcw } from 'lucide-react';
+import { Settings as SettingsIcon, RotateCcw, History, Loader2 } from 'lucide-react';
 import { ALL_CIRCLES, CIRCLE_LABELS, DEFAULT_SETTINGS } from '../lib/settings';
+import { computeMissingAttendanceContacts } from '../lib/backfillContacts';
+import { apiPost } from '../lib/api';
 
 export function SettingsTab() {
-  const { settings, updateSettings, donors, visibleDonors } = useAppStore();
+  const { settings, updateSettings, donors, visibleDonors, eventsData, holidayExtras, donations, refresh } = useAppStore();
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ done: number; total: number } | null>(null);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const runAttendanceBackfill = async () => {
+    const missing = computeMissingAttendanceContacts(eventsData, holidayExtras, donations);
+    if (missing.length === 0) {
+      setSyncResult('לא נמצאו רשומות נוכחות חסרות — הכול כבר מסונכרן.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `נמצאו ${missing.length} רשומות נוכחות (מאירועים וחגים) שעדיין אין להן רישום "יצירת קשר" תואם.\n\nלרשום את כולן עכשיו כיצירת קשר? הפעולה עלולה לקחת כמה רגעים.`
+    );
+    if (!confirmed) return;
+
+    setIsSyncing(true);
+    setSyncResult(null);
+    setSyncProgress({ done: 0, total: missing.length });
+    let successCount = 0;
+    const failedNames: string[] = [];
+
+    // רץ ברצף (לא במקביל) כדי לא להעמיס על ה-Apps Script שמריץ בקשה אחת בכל פעם.
+    for (let i = 0; i < missing.length; i++) {
+      const m = missing[i];
+      try {
+        const res = await apiPost('addMeeting', {
+          name: m.name,
+          date: m.date,
+          meetType: m.meetType,
+          purpose: m.purpose,
+          notes: m.notes,
+          nextMeet: ''
+        });
+        if (res?.error) {
+          failedNames.push(`${m.name} (${m.date})`);
+        } else {
+          successCount++;
+        }
+      } catch {
+        failedNames.push(`${m.name} (${m.date})`);
+      }
+      setSyncProgress({ done: i + 1, total: missing.length });
+    }
+
+    refresh();
+    setIsSyncing(false);
+    setSyncResult(
+      failedNames.length === 0
+        ? `✓ הושלם: נוצרו ${successCount} רשומות יצירת קשר חדשות.`
+        : `נוצרו ${successCount} רשומות. נכשלו ${failedNames.length}: ${failedNames.slice(0, 10).join(', ')}${failedNames.length > 10 ? '...' : ''}`
+    );
+  };
 
   const toggleCircle = (circle: string) => {
     const has = settings.visibleCircles.includes(circle);
@@ -90,6 +144,30 @@ export function SettingsTab() {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#EDE6D6] space-y-3">
+          <div className="flex items-center gap-2">
+            <History size={18} className="text-[#9B7A2F]" />
+            <h3 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A]">סנכרון נוכחויות עבר כיצירת קשר</h3>
+          </div>
+          <p className="text-[11px] text-gray-500 leading-relaxed">
+            סימון נוכחות באירוע/חג נרשם מעכשיו אוטומטית כ"יצירת קשר" עבור אותו אדם. הכפתור הזה סורק את <b>כל</b> הנוכחויות שכבר סומנו בעבר (לפני העדכון) ומשלים למפרע רישום יצירת קשר לכל מי שעדיין חסר לו. אפשר להריץ כמה פעמים — לא ייווצרו כפילויות.
+          </p>
+          <p className="text-[10px] text-gray-400 leading-relaxed">
+            הערה: הזמנות לחג שסומנו כ"בוצע" (ולא נוכחות בפועל) לא נכללות כאן, כי לא נשמר להן תאריך מדויק בעבר.
+          </p>
+          <button
+            onClick={runAttendanceBackfill}
+            disabled={isSyncing}
+            className="w-full bg-[#0D1B2A] hover:bg-[#16283d] disabled:opacity-60 text-white rounded-xl py-3 text-sm font-bold transition-colors flex items-center justify-center gap-2"
+          >
+            {isSyncing ? <Loader2 size={16} className="animate-spin" /> : <History size={16} />}
+            {isSyncing && syncProgress ? `מסנכרן... (${syncProgress.done}/${syncProgress.total})` : 'הרץ סנכרון עכשיו'}
+          </button>
+          {syncResult && (
+            <div className="text-[11px] text-[#0D1B2A] bg-[#FAF6EE] rounded-lg p-2.5 leading-relaxed">{syncResult}</div>
+          )}
         </div>
 
         <div className="bg-white rounded-xl p-4 border border-[#EDE6D6] space-y-3">
