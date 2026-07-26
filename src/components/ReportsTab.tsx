@@ -2,10 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { RefreshCw, Download, FileText, X, PieChart, List, Search, ChevronDown } from 'lucide-react';
 import { Donor } from '../types';
+import { StandingOrdersModal } from './StandingOrdersModal';
 
 export function ReportsTab() {
   const { summary, donations, visibleDonors, crm, refresh } = useAppStore();
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isHkOpen, setIsHkOpen] = useState(false);
   const [showAllDonations, setShowAllDonations] = useState(false);
   const [donTab, setDonTab] = useState<'donations' | 'meetings' | 'all'>('donations');
   const [donSearch, setDonSearch] = useState('');
@@ -110,19 +112,25 @@ export function ReportsTab() {
       <div className="p-4 md:p-6">
         {/* Summary KPIs — always 4-column row on desktop */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 md:mb-6">
-          {[
+          {([
             { emoji: '💰', label: 'סה"כ תרומות', value: `₪${(summary.total || 0).toLocaleString()}` },
             { emoji: '📅', label: 'החודש', value: `₪${(summary.thisMonthTotal || 0).toLocaleString()}` },
             { emoji: '👥', label: 'תורמים', value: String(summary.donorCount || 0) },
-            { emoji: '🔄', label: 'הוראות קבע', value: String(summary.hkActive || 0) },
-          ].map((item, i) => (
-            <div key={i} className="bg-white rounded-xl p-4 shadow-sm text-center">
+            { emoji: '🔄', label: 'הוראות קבע', value: String(summary.hkActive || 0), onClick: () => setIsHkOpen(true) },
+          ] as { emoji: string; label: string; value: string; onClick?: () => void }[]).map((item, i) => (
+            <div
+              key={i}
+              onClick={item.onClick}
+              className={`bg-white rounded-xl p-4 shadow-sm text-center ${item.onClick ? 'cursor-pointer active:scale-95 transition-transform hover:shadow-md' : ''}`}
+            >
               <div className="text-2xl mb-1">{item.emoji}</div>
               <div className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A]">{item.value}</div>
               <div className="text-[11px] text-gray-500 mt-0.5">{item.label}</div>
             </div>
           ))}
         </div>
+
+        {isHkOpen && <StandingOrdersModal onClose={() => setIsHkOpen(false)} />}
 
         {/* Two-column grid on desktop */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

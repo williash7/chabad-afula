@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { DonationModal } from './DonationModal';
 import { MeetingModal } from './MeetingModal';
 import { ThankYouModal } from './ThankYouModal';
+import { ThankYouLetterModal } from './ThankYouLetterModal';
 import { DateConverterModal } from './DateConverterModal';
 import { MergeContactsModal } from './MergeContactsModal';
 import { HebrewDatePicker, emptyHebrewDateValue, hebrewDateValueToHDate, hdateToValue, type HebrewDateValue } from './HebrewDatePicker';
@@ -37,6 +38,7 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
   const [isDateConverterOpen, setIsDateConverterOpen] = useState(false);
   const [isMergeOpen, setIsMergeOpen] = useState(false);
   const [thankYouInfo, setThankYouInfo] = useState<{amount: number} | null>(null);
+  const [letterInfo, setLetterInfo] = useState<{amount: number, date: string} | null>(null);
   const [isAddFamilyOpen, setIsAddFamilyOpen] = useState(false);
   const [familyLinkMode, setFamilyLinkMode] = useState<'link' | 'free'>('link');
   const [familyNameInput, setFamilyNameInput] = useState('');
@@ -811,15 +813,26 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
                               <div className="text-[11px] text-gray-500 mt-1">{e.date} · {e.data.method} {e.data.notes ? `· ${e.data.notes}` : ''}</div>
                               <div className="font-['Frank_Ruhl_Libre'] font-bold text-[#9B7A2F] mt-1.5">₪{(e.data.amount || 0).toLocaleString()}</div>
                             </div>
-                            <button 
-                              onClick={() => {
-                                setThankYouInfo({ amount: e.data.amount || 0 });
-                              }}
-                              className="text-green-600 bg-green-50 p-2 text-xs rounded-lg border border-green-100 hover:bg-green-100 transition-colors flex items-center gap-1 font-bold"
-                              title="שלח הודעת הוקרה"
-                            >
-                              <MessageSquare size={14} /> הודעת תודה
-                            </button>
+                            <div className="flex flex-col gap-1.5 shrink-0">
+                              <button 
+                                onClick={() => {
+                                  setThankYouInfo({ amount: e.data.amount || 0 });
+                                }}
+                                className="text-green-600 bg-green-50 p-2 text-xs rounded-lg border border-green-100 hover:bg-green-100 transition-colors flex items-center gap-1 font-bold"
+                                title="שלח הודעת הוקרה"
+                              >
+                                <MessageSquare size={14} /> הודעת תודה
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setLetterInfo({ amount: e.data.amount || 0, date: e.date || '' });
+                                }}
+                                className="text-amber-700 bg-amber-50 p-2 text-xs rounded-lg border border-amber-100 hover:bg-amber-100 transition-colors flex items-center gap-1 font-bold"
+                                title="מכתב תודה מעוצב"
+                              >
+                                📜 מכתב מעוצב
+                              </button>
+                            </div>
                           </div>
                         ) : (
                           <>
@@ -866,6 +879,15 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
       {isDateConverterOpen && <DateConverterModal onClose={() => setIsDateConverterOpen(false)} />}
       {isMergeOpen && <MergeContactsModal onClose={() => setIsMergeOpen(false)} presetName={name} onMerged={onClose} />}
       {thankYouInfo && <ThankYouModal donorName={name} amount={thankYouInfo.amount} phone={crmData.phone || ''} onClose={() => setThankYouInfo(null)} />}
+      {letterInfo && (
+        <ThankYouLetterModal
+          donorName={name}
+          amount={letterInfo.amount}
+          date={letterInfo.date}
+          phone={crmData.phone || ''}
+          onClose={() => setLetterInfo(null)}
+        />
+      )}
     </div>
   );
 }

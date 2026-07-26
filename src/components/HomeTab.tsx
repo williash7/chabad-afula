@@ -5,17 +5,23 @@ import { ProfileModal } from './ProfileModal';
 import { HolidayModal } from './HolidayModal';
 import { DateConverterModal } from './DateConverterModal';
 import { ThankYouModal } from './ThankYouModal';
+import { ThankYouLetterModal } from './ThankYouLetterModal';
+import { StandingOrdersModal } from './StandingOrdersModal';
 import { getCustomHols } from '../lib/api';
 import { computePersonalDateEvents } from '../lib/personalDates';
+import { countHkByStatus, isMonthlyReminderReviewed, markMonthlyReminderReviewed } from '../lib/standingOrders';
 
 export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => void, onDonationClick: () => void }) {
-  const { summary, donations, failures, rebbeDate, crm, visibleDonors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras, eventsData } = useAppStore();
+  const { summary, donations, failures, hk, rebbeDate, crm, visibleDonors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras, eventsData, settings } = useAppStore();
   const [selectedDonor, setSelectedDonor] = useState<string | null>(null);
   const [selectedHoliday, setSelectedHoliday] = useState<any | null>(null);
   const [isRebbeEditOpen, setIsRebbeEditOpen] = useState(false);
   const [isDateConverterOpen, setIsDateConverterOpen] = useState(false);
   const [selectedMethodForDetails, setSelectedMethodForDetails] = useState<string | null>(null);
   const [thankYouInfo, setThankYouInfo] = useState<{name: string, amount: number, phone: string} | null>(null);
+  const [letterInfo, setLetterInfo] = useState<{name: string, amount: number, date: string, phone: string} | null>(null);
+  const [isHkOpen, setIsHkOpen] = useState(false);
+  const [hkReminderDismissed, setHkReminderDismissed] = useState(isMonthlyReminderReviewed());
 
   const handleRebbeSave = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -309,6 +315,43 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
     );
   };
 
+  // תזכורת חודשית: מוודאת שעוברים על רשימת הוראות הקבע פעם בחודש — חשוב
+  // במיוחד סביב קמפיין שבו נפתחות המון הוראות קבע חדשות, לצד ישנות שעומדות
+  // להסתיים. מסונכרן עם שגיאות חיוב (getFailures) כדי להבליט מה דחוף עכשיו.
+  const renderHkReminder = () => {
+    if (hkReminderDismissed || hk.length === 0) return null;
+    const threshold = settings.hkExpiringThreshold ?? 2;
+    const counts = countHkByStatus(hk, threshold);
+    const failCount = failures.filter(f => hk.some(h => h.name === f.name)).length;
+    if (counts.expiring === 0 && counts.expired === 0 && failCount === 0) return null;
+
+    const dismiss = () => { markMonthlyReminderReviewed(); setHkReminderDismissed(true); };
+
+    return (
+      <div className="bg-[#0D1B2A] rounded-xl p-4 shadow-md">
+        <div className="flex items-start gap-3">
+          <span className="text-xl shrink-0">🔄</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-[#C9A84C]">בדיקה חודשית של הוראות קבע</div>
+            <div className="text-xs text-white/60 mt-1 leading-relaxed">
+              {counts.expiring > 0 && <>· {counts.expiring} מסתיימות בקרוב<br /></>}
+              {counts.expired > 0 && <>· {counts.expired} כבר הסתיימו<br /></>}
+              {failCount > 0 && <>· {failCount} עם כשל חיוב פתוח<br /></>}
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => setIsHkOpen(true)} className="bg-[#C9A84C] text-[#0D1B2A] text-xs font-bold px-3 py-1.5 rounded-full">
+                צפייה ברשימה
+              </button>
+              <button onClick={dismiss} className="text-white/40 text-xs font-semibold px-3 py-1.5">
+                סמן כנבדק החודש
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderRecent = () => (
     <div>
       <div className="flex justify-between items-center mb-3">
@@ -335,10 +378,16 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
               </div>
               <div className="text-left shrink-0 flex flex-col items-end gap-1">
                 <div className="font-['Frank_Ruhl_Libre'] text-base font-bold text-[#9B7A2F]">₪{(d.amount || 0).toLocaleString()}</div>
-                <button onClick={(e) => { e.stopPropagation(); setThankYouInfo({ name: d.name, amount: d.amount || 0, phone: crm[d.name]?.phone || '' }); }}
-                  className="bg-green-50 text-green-600 p-1.5 rounded-lg hover:bg-green-100 transition-colors flex items-center gap-1 text-[10px] font-bold" title="שלח הודעת תודה">
-                  <MessageSquare size={12} /> תודה
-                </button>
+                <div className="flex gap-1">
+                  <button onClick={(e) => { e.stopPropagation(); setThankYouInfo({ name: d.name, amount: d.amount || 0, phone: crm[d.name]?.phone || '' }); }}
+                    className="bg-green-50 text-green-600 p-1.5 rounded-lg hover:bg-green-100 transition-colors flex items-center gap-1 text-[10px] font-bold" title="שלח הודעת תודה">
+                    <MessageSquare size={12} /> תודה
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); setLetterInfo({ name: d.name, amount: d.amount || 0, date: d.date || '', phone: crm[d.name]?.phone || '' }); }}
+                    className="bg-amber-50 text-amber-700 p-1.5 rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-1 text-[10px] font-bold" title="מכתב תודה מעוצב">
+                    📜 מכתב
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -427,6 +476,7 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
         {renderStatsRow()}
         {renderQuickActions()}
         {renderHolidaysAndTasks()}
+        {renderHkReminder()}
         {renderFailures()}
         {renderRecent()}
       </div>
@@ -438,6 +488,7 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
           {renderTasksSummary()}
           {renderHeroSummary()}
           {renderStatsRow()}
+          {renderHkReminder()}
           {renderFailures()}
           {renderRecent()}
         </div>
@@ -476,6 +527,16 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
       {selectedHoliday && <HolidayModal holiday={selectedHoliday} onClose={() => setSelectedHoliday(null)} />}
       {isDateConverterOpen && <DateConverterModal onClose={() => setIsDateConverterOpen(false)} />}
       {thankYouInfo && <ThankYouModal donorName={thankYouInfo.name} amount={thankYouInfo.amount} phone={thankYouInfo.phone} onClose={() => setThankYouInfo(null)} />}
+      {letterInfo && (
+        <ThankYouLetterModal
+          donorName={letterInfo.name}
+          amount={letterInfo.amount}
+          date={letterInfo.date}
+          phone={letterInfo.phone}
+          onClose={() => setLetterInfo(null)}
+        />
+      )}
+      {isHkOpen && <StandingOrdersModal onClose={() => setIsHkOpen(false)} />}
     </div>
   );
 }

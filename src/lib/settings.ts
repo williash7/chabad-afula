@@ -12,6 +12,7 @@ export interface AppSettings {
   targetOnly: boolean; // רק מסומנים "🎯 להקרב"
   fbPageId: string;      // מזהה דף הפייסבוק
   fbAccessToken: string; // טוקן גישה לדף
+  hkExpiringThreshold: number; // כמה חיובים נותרו כדי לסמן הוראת קבע כ"מסתיימת בקרוב"
 }
 
 export const ALL_CIRCLES = ['close', 'approach', 'third', 'far', 'none'];
@@ -32,6 +33,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   targetOnly: false,
   fbPageId: '',
   fbAccessToken: '',
+  hkExpiringThreshold: 2,
 };
 
 const STORAGE_KEY = 'app_settings_v1';
