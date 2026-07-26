@@ -8,7 +8,7 @@ import { AIPlanningAssistant } from './AIPlanningAssistant';
 import { FacebookPostAssistant } from './FacebookPostAssistant';
 
 export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: number } } = {}) {
-  const { eventsData, updateEventsData, visibleDonors, crm, hk, failures, settings } = useAppStore();
+  const { eventsData, updateEventsData, visibleDonors, crm, hk, failures, settings, refresh } = useAppStore();
   const [filter, setFilter] = useState('all');
   const [isAddingMode, setIsAddingMode] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -117,9 +117,15 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
     setPendingAtt({ ...(currentAttEvent?.attendance?.[dateKey] || {}) });
   };
 
-  const saveAttendance = () => {
+  const saveAttendance = async () => {
     if (!attEventId) return;
+    const ev = eventsData.find((e: any) => e.id === attEventId);
     const dateKey = format(new Date(attDateISO), 'dd/MM/yyyy');
+    const prevAtt = ev?.attendance?.[dateKey] || {};
+    // מי סומן "נוכח" כרגע ולא היה מסומן קודם עבור אותו תאריך — רק עבורם
+    // נרשום רשומת "יצירת קשר" חדשה, כדי לא ליצור כפילויות בשמירות חוזרות.
+    const newlyPresent = Object.keys(pendingAtt).filter(name => pendingAtt[name] && !prevAtt[name]);
+
     const updated = eventsData.map((e: any) => {
       if (e.id === attEventId) {
         return {
@@ -135,6 +141,24 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
     updateEventsData(updated);
     logAction('attendance');
     setAttEventId(null);
+
+    if (newlyPresent.length > 0 && ev) {
+      try {
+        const { apiPost } = await import('../lib/api');
+        await Promise.all(newlyPresent.map(name =>
+          apiPost('addMeeting', {
+            name,
+            date: dateKey,
+            meetType: 'נוכחות באירוע',
+            purpose: ev.name || '',
+            notes: `נוכחות באירוע: ${ev.name || ''}`,
+          }).catch(err => console.error('addMeeting failed for', name, err))
+        ));
+        refresh();
+      } catch (err) {
+        console.error('Error logging attendance as contact:', err);
+      }
+    }
   };
 
   const currentAttEvent = eventsData.find((e: any) => e.id === attEventId);

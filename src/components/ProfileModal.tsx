@@ -878,13 +878,13 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
       {isMeetingOpen && <MeetingModal onClose={() => setIsMeetingOpen(false)} donorName={name} />}
       {isDateConverterOpen && <DateConverterModal onClose={() => setIsDateConverterOpen(false)} />}
       {isMergeOpen && <MergeContactsModal onClose={() => setIsMergeOpen(false)} presetName={name} onMerged={onClose} />}
-      {thankYouInfo && <ThankYouModal donorName={name} amount={thankYouInfo.amount} phone={crmData.phone || ''} onClose={() => setThankYouInfo(null)} />}
+      {thankYouInfo && <ThankYouModal donorName={name} amount={thankYouInfo.amount} phone={crmData.phone || (donor as any)['טלפון'] || ''} onClose={() => setThankYouInfo(null)} />}
       {letterInfo && (
         <ThankYouLetterModal
           donorName={name}
           amount={letterInfo.amount}
           date={letterInfo.date}
-          phone={crmData.phone || ''}
+          phone={crmData.phone || (donor as any)['טלפון'] || ''}
           onClose={() => setLetterInfo(null)}
         />
       )}

@@ -7,12 +7,12 @@ import { logAction } from '../lib/score';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
 
 export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () => void }) {
-  const { holidayExtras, updateHolidayExtras, visibleDonors, crm, hk, failures } = useAppStore();
+  const { holidayExtras, updateHolidayExtras, visibleDonors, crm, hk, failures, refresh } = useAppStore();
   const [inviteCategory, setInviteCategory] = useState('all');
-  
+
   // Use either the real id or fallback to stringified name for custom holidays
   const id = holiday.id || holiday.name;
-  const extra = holidayExtras[id] || { insights: {}, lastYear: {}, reminders: [], tasks: [] };
+  const extra = holidayExtras[id] || { insights: {}, lastYear: {}, reminders: [], tasks: [], attendance: {} };
 
   const [isEditingInsights, setIsEditingInsights] = useState(false);
   const [isEditingLastYear, setIsEditingLastYear] = useState(false);
@@ -20,6 +20,14 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
   const [addTaskText, setAddTaskText] = useState('');
   const [isCreatingDoc, setIsCreatingDoc] = useState(false);
   const [docError, setDocError] = useState<string | null>(null);
+
+  // נוכחות בחג — אותה טכניקה כמו נוכחות באירועים (EventsTab), נשמר בתוך
+  // holidayExtras[id].attendance לפי תאריך.
+  const [isAttOpen, setIsAttOpen] = useState(false);
+  const [attDateISO, setAttDateISO] = useState(() => new Date().toISOString().split('T')[0]);
+  const [pendingAtt, setPendingAtt] = useState<Record<string, boolean>>({});
+  const [attSearch, setAttSearch] = useState('');
+  const [attCategory, setAttCategory] = useState('all');
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -141,6 +149,75 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
     nextTasks.splice(idx, 1);
     updateHolidayExtras(id, { tasks: nextTasks });
   };
+
+  const attDonorNames = Object.keys(visibleDonors).filter(n => {
+    if (attSearch && !n.includes(attSearch)) return false;
+    if (attCategory !== 'all') {
+      const cData = crm[n] || {};
+      if (attCategory === 'target' && !cData.target) return false;
+      if (attCategory === 'hk') {
+        const hasHk = hk.some((h: any) => h.name === n && h.active);
+        if (!hasHk) return false;
+      }
+      if (attCategory === 'errors') {
+        const hasError = failures.some((f: any) => f.name === n);
+        if (!hasError) return false;
+      }
+      if (['close', 'approach', 'third', 'far'].includes(attCategory) && cData.circle !== attCategory) return false;
+    }
+    return true;
+  }).sort();
+
+  const openAttModal = () => {
+    const dateKey = new Date(attDateISO).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    setPendingAtt({ ...(extra.attendance?.[dateKey] || {}) });
+    setAttSearch('');
+    setIsAttOpen(true);
+  };
+
+  const changeAttDate = (iso: string) => {
+    setAttDateISO(iso);
+    const dateKey = new Date(iso).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    setPendingAtt({ ...(extra.attendance?.[dateKey] || {}) });
+  };
+
+  const saveHolidayAttendance = async () => {
+    const dateKey = new Date(attDateISO).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const prevAtt = extra.attendance?.[dateKey] || {};
+    // מי סומן "נוכח" כרגע ולא היה מסומן קודם עבור אותו תאריך — רק עבורם
+    // נרשום רשומת "יצירת קשר" חדשה, כדי לא ליצור כפילויות בשמירות חוזרות.
+    const newlyPresent = Object.keys(pendingAtt).filter(name => pendingAtt[name] && !prevAtt[name]);
+
+    updateHolidayExtras(id, { attendance: { ...(extra.attendance || {}), [dateKey]: pendingAtt } });
+    logAction('attendance');
+    setIsAttOpen(false);
+
+    if (newlyPresent.length > 0) {
+      try {
+        const { apiPost } = await import('../lib/api');
+        await Promise.all(newlyPresent.map(name =>
+          apiPost('addMeeting', {
+            name,
+            date: dateKey,
+            meetType: 'נוכחות בחג',
+            purpose: holiday.name || '',
+            notes: `נוכחות בחג: ${holiday.name || ''}`,
+          }).catch(err => console.error('addMeeting failed for', name, err))
+        ));
+        refresh();
+      } catch (err) {
+        console.error('Error logging holiday attendance as contact:', err);
+      }
+    }
+  };
+
+  const lastAttDates = Object.keys(extra.attendance || {}).sort((a, b) => {
+    const [d1, m1, y1] = a.split('/');
+    const [d2, m2, y2] = b.split('/');
+    return new Date(`${y2}-${m2}-${d2}`).getTime() - new Date(`${y1}-${m1}-${d1}`).getTime();
+  });
+  const lastAttDate = lastAttDates[0];
+  const lastAttCount = lastAttDate ? Object.values(extra.attendance[lastAttDate]).filter(Boolean).length : 0;
 
   const handleExportReport = () => {
     const dateLabel = hDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -396,12 +473,28 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
                       return (
                         <button
                           key={p}
-                          onClick={() => {
+                          onClick={async () => {
                             const wasDone = (t.doneNames || []).includes(p);
                             const nextTasks = [...extra.tasks];
                             nextTasks[i] = toggleInvitePerson(t, p);
                             updateHolidayExtras(id, { tasks: nextTasks });
-                            if (!wasDone) logAction('invite_done');
+                            if (!wasDone) {
+                              logAction('invite_done');
+                              try {
+                                const { apiPost } = await import('../lib/api');
+                                const dateKey = new Date().toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                                await apiPost('addMeeting', {
+                                  name: p,
+                                  date: dateKey,
+                                  meetType: 'טלפון',
+                                  purpose: `הזמנה ל${holiday.name}`,
+                                  notes: `הוזמן/ה לחג: ${holiday.name}`,
+                                });
+                                refresh();
+                              } catch (err) {
+                                console.error('Error logging invite as contact:', err);
+                              }
+                            }
                           }}
                           className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${isDone ? 'bg-[#D1FAE5] border-[#10B981] text-[#065F46] line-through' : 'bg-[#FAF6EE] border-[#EDE6D6] text-[#0D1B2A]'}`}
                         >
@@ -546,6 +639,25 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
               </div>
             </div>
           )}
+        </div>
+
+        {/* Attendance Section */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A]">🙋 נוכחות בחג</h3>
+            <button onClick={openAttModal} className="bg-[#C9A84C]/10 text-[#9B7A2F] text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-transform flex items-center gap-1.5">
+              <Check size={14}/> סמן נוכחות
+            </button>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm p-4 border border-[#EDE6D6]">
+            {lastAttDate ? (
+              <div className="text-sm text-[#0D1B2A]">
+                <span className="font-bold">{lastAttCount}</span> נוכחים נרשמו לתאריך <span className="font-bold">{lastAttDate}</span>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-400 text-center py-1">עדיין לא נרשמה נוכחות לחג זה</div>
+            )}
+          </div>
         </div>
 
         {/* Budget Section */}
@@ -820,6 +932,82 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
         )}
 
       </div>
+
+      {/* Attendance Modal */}
+      {isAttOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[300] flex items-end justify-center p-0 md:p-4 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && setIsAttOpen(false)}>
+          <div className="bg-[#FAF6EE] rounded-t-3xl md:rounded-3xl p-5 pb-8 w-full max-w-[430px] max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex-1">
+                <h2 className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] flex items-center gap-2">✅ נוכחות — {holiday.name}</h2>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <label className="text-xs text-gray-500 shrink-0">תאריך:</label>
+                  <input
+                    type="date"
+                    value={attDateISO}
+                    onChange={e => changeAttDate(e.target.value)}
+                    className="bg-white border border-[#EDE6D6] rounded-lg px-2 py-1 text-xs outline-none focus:border-[#C9A84C]"
+                  />
+                </div>
+              </div>
+              <button onClick={() => setIsAttOpen(false)} className="bg-gray-200/50 p-2 rounded-full text-gray-500 hover:bg-gray-200 shrink-0"><X size={16}/></button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="חיפוש לפי שם..."
+              value={attSearch}
+              onChange={e => setAttSearch(e.target.value)}
+              className="w-full bg-white border border-[#EDE6D6] rounded-xl px-3.5 py-3 text-sm outline-none focus:border-[#C9A84C] mb-3 shadow-sm shrink-0"
+            />
+
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar shrink-0">
+              {[
+                { id: 'all', label: 'הכל' },
+                { id: 'close', label: '⭐ קרוב' },
+                { id: 'approach', label: '🔄 מתקרב' },
+                { id: 'third', label: '⭕ מ. שלישי' },
+                { id: 'target', label: '🎯 להקרב' },
+                { id: 'hk', label: 'הוק' },
+                { id: 'errors', label: 'שגיאות' }
+              ].map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => setAttCategory(c.id)}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium border-[1.5px] transition-colors ${
+                    attCategory === c.id
+                      ? 'bg-[#0D1B2A] border-[#0D1B2A] text-[#C9A84C]'
+                      : 'bg-white border-[#EDE6D6] text-gray-500'
+                  }`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1 space-y-2 mb-4 custom-scrollbar">
+              {attDonorNames.map(n => {
+                const isChecked = pendingAtt[n];
+                return (
+                  <div key={n} onClick={() => setPendingAtt({...pendingAtt, [n]: !isChecked})} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer shadow-sm transition-colors border ${isChecked ? 'bg-[#D1FAE5] border-[#10B981]/50' : 'bg-white border-[#EDE6D6]'}`}>
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#0D1B2A] to-[#1A2E45] text-white flex items-center justify-center font-bold text-sm shrink-0">
+                      {n.charAt(0)}
+                    </div>
+                    <div className="flex-1 font-bold text-[#0D1B2A]">{n}</div>
+                    <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${isChecked ? 'bg-[#10B981] border-[#10B981] text-white' : 'bg-white border-[#EDE6D6]'}`}>
+                      {isChecked && <Check size={14} />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button onClick={saveHolidayAttendance} className="w-full bg-gradient-to-br from-[#0D1B2A] to-[#1A2E45] text-white rounded-xl py-3.5 font-bold shadow-md shrink-0">
+              שמור נוכחות ({Object.values(pendingAtt).filter(Boolean).length})
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
