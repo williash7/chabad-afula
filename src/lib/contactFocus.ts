@@ -28,6 +28,25 @@ export function computeLastContactByName(donations: any[]): Map<string, Date> {
   return lastMeetingByName;
 }
 
+// כמו computeLastContactByName, אבל מחזיר גם את פרטי המפגש האחרון עצמו
+// (סוג/מטרה/הערות) — כדי שאפשר יהיה להציג לצד התאריך *במה* בדיוק היה
+// יצירת הקשר (למשל "נוכחות באירוע: חנוכה"), ולא רק "לפני X ימים" בלי הסבר.
+export function computeLastContactDetailsByName(donations: any[]): Map<string, { date: Date; meetType?: string; purpose?: string; notes?: string }> {
+  const lastByName = new Map<string, { date: Date; meetType?: string; purpose?: string; notes?: string }>();
+  (donations as any[]).forEach(d => {
+    if ((d.amount || 0) !== 0 || !d.name) return;
+    const dateStr = d.date || d.meetDate;
+    if (!dateStr) return;
+    const parsed = new Date(String(dateStr).split('/').reverse().join('-'));
+    if (isNaN(parsed.getTime())) return;
+    const prev = lastByName.get(d.name);
+    if (!prev || parsed > prev.date) {
+      lastByName.set(d.name, { date: parsed, meetType: d.meetType, purpose: d.purpose || d.meetPurpose, notes: d.notes });
+    }
+  });
+  return lastByName;
+}
+
 export function formatLastContact(date: Date | undefined, today: Date): string {
   if (!date) return 'מעולם לא תועד';
   const days = Math.floor((today.getTime() - date.getTime()) / 86400000);

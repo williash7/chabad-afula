@@ -1,3 +1,5 @@
+import { slashDateToDotDate } from './dateUtils';
+
 // חישוב רשומות "נוכחות" היסטוריות (מאירועים ומחגים) שעדיין אין להן רשומת
 // "יצירת קשר" (מפגש, amount===0) תואמת ביומן donations/meetings המשותף.
 // המטרה: אפשר להריץ "סנכרון חד-פעמי" שמשלים למפרע רישומי קשר שלא נוצרו
@@ -51,7 +53,7 @@ export function computeMissingAttendanceContacts(
         existingKeys.add(key); // מונע כפילות גם בתוך אותה ריצת סנכרון
         missing.push({
           name,
-          date: dateKey,
+          date: slashDateToDotDate(dateKey),
           meetType: 'נוכחות באירוע',
           purpose: ev.name || '',
           notes: `נוכחות באירוע: ${ev.name || ''} (סונכרן למפרע)`,

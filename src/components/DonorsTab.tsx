@@ -14,7 +14,18 @@ export function DonorsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('total');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [detailFilter, setDetailFilter] = useState('all');
   const [selectedDonor, setSelectedDonor] = useState<string | null>(null);
+
+  // כיוון ברירת מחדל הגיוני לכל סוג מיון (כמו שהיה נהוג עד כה): תרומה
+  // ומעגל — מהגבוה/הקרוב ביותר קודם; שם ותאריך — א'-ב'/הקרוב ביותר קודם.
+  const defaultDirFor = (mode: string): 'asc' | 'desc' => (mode === 'name' || mode === 'date') ? 'asc' : 'desc';
+  const changeSort = (mode: string) => {
+    if (mode === sort) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); return; }
+    setSort(mode);
+    setSortDir(defaultDirFor(mode));
+  };
 
   const [isAddContactOpen, setIsAddContactOpen] = useState(false);
   const [newContactName, setNewContactName] = useState('');
@@ -78,6 +89,18 @@ export function DonorsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
 
   if (search) list = list.filter(d => d.name.toLowerCase().includes(search.toLowerCase()));
 
+  // סינון לפי פרטים קיימים/חסרים (טלפון, יום הולדת, יארצייט) — משתמש
+  // באותם פונקציות מציאה שכבר קיימות בשאר האפליקציה (כרטיס איש קשר, תזכורות).
+  const hasPhone = (d: Donor) => !!(crm[d.name]?.phone || (d as any)['טלפון']);
+  const hasBirthday = (d: Donor) => !!(findGregorianBirthday(d as any) || findHebrewBirthday(d as any));
+  const hasYahrzeit = (d: Donor) => findYahrzeitEntries(d as any).length > 0;
+  if (detailFilter === 'hasPhone') list = list.filter(hasPhone);
+  else if (detailFilter === 'noPhone') list = list.filter(d => !hasPhone(d));
+  else if (detailFilter === 'hasBirthday') list = list.filter(hasBirthday);
+  else if (detailFilter === 'noBirthday') list = list.filter(d => !hasBirthday(d));
+  else if (detailFilter === 'hasYahrzeit') list = list.filter(hasYahrzeit);
+  else if (detailFilter === 'noYahrzeit') list = list.filter(d => !hasYahrzeit(d));
+
   const getNearestDateDays = (d: Donor) => {
     let minDays = 365;
     const today = new Date();
@@ -105,16 +128,17 @@ export function DonorsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
   };
 
   list.sort((a, b) => {
-    if (sort === 'total') return (b.total || 0) - (a.total || 0);
-    if (sort === 'name') return a.name.localeCompare(b.name, 'he');
-    if (sort === 'circle') {
-      const w = { close: 4, approach: 3, third: 2, target: 1 };
+    let cmp = 0;
+    if (sort === 'total') cmp = (a.total || 0) - (b.total || 0);
+    else if (sort === 'name') cmp = a.name.localeCompare(b.name, 'he');
+    else if (sort === 'circle') {
+      const w = { target: 1, third: 2, approach: 3, close: 4 };
       const wA = w[(crm[a.name] || {}).circle as keyof typeof w] || 0;
       const wB = w[(crm[b.name] || {}).circle as keyof typeof w] || 0;
-      return wB - wA || (b.total || 0) - (a.total || 0);
+      cmp = wA - wB || (a.total || 0) - (b.total || 0);
     }
-    if (sort === 'date') return getNearestDateDays(a) - getNearestDateDays(b);
-    return 0;
+    else if (sort === 'date') cmp = getNearestDateDays(a) - getNearestDateDays(b);
+    return sortDir === 'asc' ? cmp : -cmp;
   });
 
   const circleLabel: Record<string, string> = { close: '⭐ קרוב', approach: '🔄 מתקרב', third: '⭕ שלישי', far: '' };
@@ -202,16 +226,55 @@ export function DonorsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
             />
           </div>
 
-          <div className="md:hidden mb-3">
+          <div className="md:hidden mb-3 flex gap-2">
             <select
-              className="bg-white border border-[#EDE6D6] text-sm rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#C9A84C] text-[#0D1B2A] font-medium shadow-sm w-full"
+              className="flex-1 bg-white border border-[#EDE6D6] text-sm rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#C9A84C] text-[#0D1B2A] font-medium shadow-sm"
               value={sort}
-              onChange={e => setSort(e.target.value)}
+              onChange={e => changeSort(e.target.value)}
             >
               <option value="total">מיון: לפי תרומה</option>
               <option value="name">מיון: לפי שם</option>
               <option value="circle">מיון: לפי מעגל</option>
               <option value="date">מיון: לפי תאריכים</option>
+            </select>
+            <button
+              onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+              className="shrink-0 bg-white border border-[#EDE6D6] rounded-xl px-3 py-1.5 text-sm font-bold text-[#0D1B2A] shadow-sm"
+              title={sortDir === 'asc' ? 'סדר עולה' : 'סדר יורד'}
+            >
+              {sortDir === 'asc' ? '↑ עולה' : '↓ יורד'}
+            </button>
+          </div>
+
+          <div className="md:hidden mb-3">
+            <select
+              className="w-full bg-white border border-[#EDE6D6] text-sm rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#C9A84C] text-[#0D1B2A] font-medium shadow-sm"
+              value={detailFilter}
+              onChange={e => setDetailFilter(e.target.value)}
+            >
+              <option value="all">כל אנשי הקשר (ללא סינון פרטים)</option>
+              <option value="hasPhone">יש טלפון</option>
+              <option value="noPhone">אין טלפון</option>
+              <option value="hasBirthday">יש יום הולדת</option>
+              <option value="noBirthday">אין יום הולדת</option>
+              <option value="hasYahrzeit">יש יארצייט</option>
+              <option value="noYahrzeit">אין יארצייט</option>
+            </select>
+          </div>
+
+          <div className="hidden md:block md:shrink-0 md:ml-2">
+            <select
+              className="bg-white border border-[#EDE6D6] text-sm rounded-xl px-3 py-1.5 focus:outline-none focus:border-[#C9A84C] text-[#0D1B2A] font-medium shadow-sm"
+              value={detailFilter}
+              onChange={e => setDetailFilter(e.target.value)}
+            >
+              <option value="all">כל אנשי הקשר (ללא סינון פרטים)</option>
+              <option value="hasPhone">יש טלפון</option>
+              <option value="noPhone">אין טלפון</option>
+              <option value="hasBirthday">יש יום הולדת</option>
+              <option value="noBirthday">אין יום הולדת</option>
+              <option value="hasYahrzeit">יש יארצייט</option>
+              <option value="noYahrzeit">אין יארצייט</option>
             </select>
           </div>
 
@@ -290,27 +353,27 @@ export function DonorsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                 <div className="px-4 py-3" />
                 <button
                   className="px-4 py-3 text-right hover:text-[#C9A84C] transition-colors"
-                  onClick={() => setSort('name')}
+                  onClick={() => changeSort('name')}
                 >
-                  שם {sort === 'name' && '↑'}
+                  שם {sort === 'name' && (sortDir === 'asc' ? '↑' : '↓')}
                 </button>
                 <button
                   className="px-4 py-3 text-right hover:text-[#C9A84C] transition-colors"
-                  onClick={() => setSort('circle')}
+                  onClick={() => changeSort('circle')}
                 >
-                  מעגל {sort === 'circle' && '↑'}
+                  מעגל {sort === 'circle' && (sortDir === 'asc' ? '↑' : '↓')}
                 </button>
                 <button
                   className="px-4 py-3 text-right hover:text-[#C9A84C] transition-colors"
-                  onClick={() => setSort('total')}
+                  onClick={() => changeSort('total')}
                 >
-                  סה"כ תרומות {sort === 'total' && '↓'}
+                  סה"כ תרומות {sort === 'total' && (sortDir === 'asc' ? '↑' : '↓')}
                 </button>
                 <button
                   className="px-4 py-3 text-right hover:text-[#C9A84C] transition-colors"
-                  onClick={() => setSort('date')}
+                  onClick={() => changeSort('date')}
                 >
-                  תאריך אחרון {sort === 'date' && '↑'}
+                  תאריך אחרון {sort === 'date' && (sortDir === 'asc' ? '↑' : '↓')}
                 </button>
                 <div className="px-4 py-3 text-center">סטטוס</div>
               </div>

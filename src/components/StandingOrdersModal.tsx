@@ -1,13 +1,30 @@
 import React, { useState, useMemo } from 'react';
-import { X, Search, RefreshCw, AlertTriangle, ChevronDown } from 'lucide-react';
+import { X, Search, RefreshCw, AlertTriangle, ChevronDown, ChevronLeft } from 'lucide-react';
 import { useAppStore } from '../store/AppContext';
 import { getHkStatus, sortHkList, countHkByStatus, HK_STATUS_LABEL, HK_STATUS_COLOR, HkStatus } from '../lib/standingOrders';
+import { ProfileModal } from './ProfileModal';
+
+// "הסתיימה לאחרונה" — כדי לא להציג כברירת מחדל הוראות קבע שהסתיימו לפני
+// שנים ואינן רלוונטיות יותר. אפשר להרחיב לצפייה בהיסטוריה המלאה דרך המתג
+// "הצג גם ישנות" למטה.
+const RECENT_MONTHS = 3;
+function isRecentlyRelevant(h: any, threshold: number): boolean {
+  const status = getHkStatus(h, threshold);
+  if (status !== 'expired') return true;
+  if (!h.lastBilled) return true; // בלי תאריך חיוב אחרון, לא מסננים כדי לא "לאבד" רשומות
+  const parsed = new Date(String(h.lastBilled).replace(/\./g, '/').split('/').reverse().join('-'));
+  if (isNaN(parsed.getTime())) return true;
+  const monthsAgo = (Date.now() - parsed.getTime()) / (1000 * 60 * 60 * 24 * 30);
+  return monthsAgo <= RECENT_MONTHS;
+}
 
 export function StandingOrdersModal({ onClose }: { onClose: () => void }) {
   const { hk, failures, refresh, settings, updateSettings } = useAppStore();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | HkStatus | 'errors'>('all');
   const [showSettings, setShowSettings] = useState(false);
+  const [showOld, setShowOld] = useState(false);
+  const [selectedDonor, setSelectedDonor] = useState<string | null>(null);
 
   const threshold = settings.hkExpiringThreshold ?? 2;
   const failNames = useMemo(() => new Set(failures.map((f: any) => f.name)), [failures]);
@@ -19,14 +36,16 @@ export function StandingOrdersModal({ onClose }: { onClose: () => void }) {
 
   const sorted = useMemo(() => sortHkList(hk, failNames, threshold), [hk, failNames, threshold]);
   const counts = useMemo(() => countHkByStatus(hk, threshold), [hk, threshold]);
+  const hiddenOldCount = useMemo(() => hk.filter(h => !isRecentlyRelevant(h, threshold)).length, [hk, threshold]);
 
   let list = sorted;
+  if (!showOld) list = list.filter(h => isRecentlyRelevant(h, threshold));
   if (filter === 'errors') list = list.filter(h => failNames.has(h.name));
   else if (filter !== 'all') list = list.filter(h => getHkStatus(h, threshold) === filter);
   if (search) list = list.filter(h => h.name?.toLowerCase().includes(search.toLowerCase()));
 
   const filterTabs: { id: 'all' | HkStatus | 'errors'; label: string; count: number }[] = [
-    { id: 'all', label: 'הכל', count: hk.length },
+    { id: 'all', label: showOld ? 'הכל (כולל ישנות)' : 'הכל', count: list.length },
     { id: 'expiring', label: 'מסתיימות בקרוב', count: counts.expiring },
     { id: 'expired', label: 'הסתיימו', count: counts.expired },
     { id: 'active', label: 'פעילות', count: counts.active },
@@ -110,6 +129,21 @@ export function StandingOrdersModal({ onClose }: { onClose: () => void }) {
             />
           </div>
         )}
+
+        {/* הבהרה: מה מוצג ברשימה כברירת מחדל, ומה זה "כשלי חיוב" */}
+        <div className="mt-2 text-[10px] text-gray-400 leading-relaxed">
+          כברירת מחדל מוצגות הוראות קבע <b>פעילות</b> או שהסתיימו ב-{RECENT_MONTHS} החודשים האחרונים בלבד.
+          "כשלי חיוב" = תורמים שהחיוב האחרון שלהם נכשל (למשל כרטיס פג תוקף) — הסיבה מוצגת ליד השם.
+          לחיצה על שם פותחת את כרטיס התורם עם כל היסטוריית התרומות/מפגשים שלו.
+        </div>
+        {hiddenOldCount > 0 && (
+          <button
+            onClick={() => setShowOld(v => !v)}
+            className="mt-1.5 text-[11px] text-[#9B7A2F] font-semibold underline"
+          >
+            {showOld ? `הסתר שוב הוראות קבע ישנות (${hiddenOldCount})` : `הצג גם ${hiddenOldCount} הוראות קבע ישנות שהסתיימו מזמן`}
+          </button>
+        )}
       </div>
 
       {/* List */}
@@ -122,10 +156,14 @@ export function StandingOrdersModal({ onClose }: { onClose: () => void }) {
               const status = getHkStatus(h, threshold);
               const fail = failByName[h.name];
               return (
-                <div key={i} className={`bg-white rounded-xl p-3 border shadow-sm ${fail ? 'border-red-200' : 'border-[#EDE6D6]'}`}>
+                <div
+                  key={i}
+                  onClick={() => setSelectedDonor(h.name)}
+                  className={`bg-white rounded-xl p-3 border shadow-sm cursor-pointer hover:border-[#C9A84C] transition-colors ${fail ? 'border-red-200' : 'border-[#EDE6D6]'}`}
+                >
                   <div className="flex justify-between items-start gap-2">
                     <div className="min-w-0">
-                      <div className="text-sm font-bold text-[#0D1B2A] truncate">{h.name}</div>
+                      <div className="text-sm font-bold text-[#0D1B2A] truncate flex items-center gap-1">{h.name} <ChevronLeft size={12} className="text-gray-300" /></div>
                       <div className="text-[11px] text-gray-500 mt-0.5">
                         חיוב אחרון: {h.lastBilled || '—'}
                       </div>
@@ -151,6 +189,8 @@ export function StandingOrdersModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </div>
+
+      {selectedDonor && <ProfileModal name={selectedDonor} onClose={() => setSelectedDonor(null)} />}
     </div>
   );
 }

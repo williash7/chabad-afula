@@ -4,6 +4,7 @@ import { Plus, Check, X, ClipboardList, Trash2, Pencil, Clock } from 'lucide-rea
 import { format } from 'date-fns';
 import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL, nextEventOccurrence, formatRemaining, createEventMediaTasks } from '../lib/tasks';
 import { logAction } from '../lib/score';
+import { slashDateToDotDate } from '../lib/dateUtils';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
 import { FacebookPostAssistant } from './FacebookPostAssistant';
 
@@ -148,7 +149,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
         const results = await Promise.all(newlyPresent.map(name =>
           apiPost('addMeeting', {
             name,
-            date: dateKey,
+            date: slashDateToDotDate(dateKey),
             meetType: 'נוכחות באירוע',
             purpose: ev.name || '',
             notes: `נוכחות באירוע: ${ev.name || ''}`,

@@ -50,38 +50,56 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     return map;
   }, [holidays]);
 
+  // מציגים רק משימות פתוחות (לא בוצעו) — משימה שסומנה כבוצעה נעלמת מהמסך.
+  // שומרים את האינדקס המקורי במערך (idx) לכל משימה, כדי שהכפתורים (סימון/מחיקה)
+  // עדיין יפנו לפריט הנכון במערך המקורי גם אחרי הסינון.
   const holidayGroups = Object.keys(holidayExtras)
     .filter(id => id !== STANDALONE_TASKS_ID)
-    .map(id => ({ id, tasks: holidayExtras[id]?.tasks || [] }))
+    .map(id => {
+      const allTasks = holidayExtras[id]?.tasks || [];
+      const tasks = allTasks
+        .map((t: any, idx: number) => ({ t, idx }))
+        .filter((x: any) => !x.t.done);
+      return { id, tasks };
+    })
     .filter(g => g.tasks.length > 0);
 
   const eventGroups = (eventsData as any[])
-    .map(e => ({ id: e.id, name: e.name, tasks: e.tasks || [] }))
+    .map(e => {
+      const allTasks = e.tasks || [];
+      const tasks = allTasks
+        .map((t: any, idx: number) => ({ t, idx }))
+        .filter((x: any) => !x.t.done);
+      return { id: e.id, name: e.name, tasks };
+    })
     .filter(g => g.tasks.length > 0);
 
-  const standaloneTasks: any[] = holidayExtras[STANDALONE_TASKS_ID]?.tasks || [];
+  const allStandaloneTasks: any[] = holidayExtras[STANDALONE_TASKS_ID]?.tasks || [];
+  const standaloneTasks = allStandaloneTasks
+    .map((t: any, idx: number) => ({ t, idx }))
+    .filter((x: any) => !x.t.done);
 
-  const openHolidayCount = holidayGroups.reduce((s, g) => s + g.tasks.filter((t: any) => !t.done).length, 0);
-  const openEventCount = eventGroups.reduce((s, g) => s + g.tasks.filter((t: any) => !t.done).length, 0);
-  const openStandaloneCount = standaloneTasks.filter((t: any) => !t.done).length;
+  const openHolidayCount = holidayGroups.reduce((s, g) => s + g.tasks.length, 0);
+  const openEventCount = eventGroups.reduce((s, g) => s + g.tasks.length, 0);
+  const openStandaloneCount = standaloneTasks.length;
 
   const toggleStandaloneTask = (idx: number) => {
-    const wasDone = standaloneTasks[idx]?.done;
-    const tasks = [...standaloneTasks];
+    const wasDone = allStandaloneTasks[idx]?.done;
+    const tasks = [...allStandaloneTasks];
     tasks[idx] = { ...tasks[idx], done: !tasks[idx].done };
     updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
     if (!wasDone) logAction('task_complete');
   };
 
   const deleteStandaloneTask = (idx: number) => {
-    const tasks = [...standaloneTasks];
+    const tasks = [...allStandaloneTasks];
     tasks.splice(idx, 1);
     updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
   };
 
   const toggleStandaloneInvitePerson = (idx: number, person: string) => {
-    const wasDone = (standaloneTasks[idx]?.doneNames || []).includes(person);
-    const tasks = [...standaloneTasks];
+    const wasDone = (allStandaloneTasks[idx]?.doneNames || []).includes(person);
+    const tasks = [...allStandaloneTasks];
     tasks[idx] = toggleInvitePerson(tasks[idx], person);
     updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
     if (!wasDone) logAction('invite_done');
@@ -91,7 +109,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     if (!standaloneText.trim()) return;
     const newTask: any = { text: standaloneText.trim(), done: false };
     if (standaloneDue) newTask.dueDate = standaloneDue;
-    updateHolidayExtras(STANDALONE_TASKS_ID, { tasks: [...standaloneTasks, newTask] });
+    updateHolidayExtras(STANDALONE_TASKS_ID, { tasks: [...allStandaloneTasks, newTask] });
     logAction('task_create');
     setStandaloneText('');
     setStandaloneDue('');
@@ -283,9 +301,9 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
                       <div className="text-[10px] text-gray-400 flex items-center gap-1 mb-2"><Clock size={10} /> {formatRemaining(target, new Date())}</div>
                     )}
                     <div className="space-y-2">
-                      {g.tasks.map((t: any, i: number) => (
-                        <div key={i}>
-                          {renderTaskItem(t, () => toggleHolidayTask(g.id, i), () => deleteHolidayTask(g.id, i), p => toggleHolidayInvitePerson(g.id, i, p))}
+                      {g.tasks.map(({ t, idx }: any) => (
+                        <div key={idx}>
+                          {renderTaskItem(t, () => toggleHolidayTask(g.id, idx), () => deleteHolidayTask(g.id, idx), p => toggleHolidayInvitePerson(g.id, idx, p))}
                         </div>
                       ))}
                     </div>
@@ -319,9 +337,9 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
                       <div className="text-[10px] text-gray-400 flex items-center gap-1 mb-2"><Clock size={10} /> {formatRemaining(nextOcc, new Date())} עד המפגש הבא</div>
                     )}
                     <div className="space-y-2">
-                      {g.tasks.map((t: any, i: number) => (
-                        <div key={i}>
-                          {renderTaskItem(t, () => toggleEventTask(g.id, i), () => deleteEventTask(g.id, i), p => toggleEventInvitePerson(g.id, i, p))}
+                      {g.tasks.map(({ t, idx }: any) => (
+                        <div key={idx}>
+                          {renderTaskItem(t, () => toggleEventTask(g.id, idx), () => deleteEventTask(g.id, idx), p => toggleEventInvitePerson(g.id, idx, p))}
                         </div>
                       ))}
                     </div>
@@ -343,9 +361,9 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
             </div>
           ) : (
             <div className="space-y-2 mb-3">
-              {standaloneTasks.map((t: any, i: number) => (
-                <div key={i}>
-                  {renderTaskItem(t, () => toggleStandaloneTask(i), () => deleteStandaloneTask(i), p => toggleStandaloneInvitePerson(i, p))}
+              {standaloneTasks.map(({ t, idx }: any) => (
+                <div key={idx}>
+                  {renderTaskItem(t, () => toggleStandaloneTask(idx), () => deleteStandaloneTask(idx), p => toggleStandaloneInvitePerson(idx, p))}
                 </div>
               ))}
             </div>

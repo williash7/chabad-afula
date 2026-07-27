@@ -8,7 +8,7 @@ export function ReportsTab() {
   const { summary, donations, visibleDonors, crm, refresh } = useAppStore();
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isHkOpen, setIsHkOpen] = useState(false);
-  const [showAllDonations, setShowAllDonations] = useState(false);
+  const [showAllDonations, setShowAllDonations] = useState(true);
   const [donTab, setDonTab] = useState<'donations' | 'meetings' | 'all'>('donations');
   const [donSearch, setDonSearch] = useState('');
   const [donMethod, setDonMethod] = useState('');

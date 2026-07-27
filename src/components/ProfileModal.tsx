@@ -15,7 +15,7 @@ import {
   gregorianPairFor, hebrewPairFor, findGregorianBirthday, findHebrewBirthday,
 } from '../lib/donorDates';
 import { toCanonicalHebrewString, parseCanonicalHebrewString, hebrewToGregorianCompanion, gregorianToHebrewCompanion } from '../lib/hebrewDates';
-import { computeLastContactByName, formatLastContact } from '../lib/contactFocus';
+import { computeLastContactByName, computeLastContactDetailsByName, formatLastContact } from '../lib/contactFocus';
 
 interface FamilyMember {
   id: string;
@@ -49,6 +49,7 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
   const donor = donors[name] || { name, total: 0, donations: [], lastDate: '' };
   const crmData = crm[name] || { circle: 'far', target: false, phone: '' };
   const lastContactDate = React.useMemo(() => computeLastContactByName(donations).get(name), [donations, name]);
+  const lastContactDetails = React.useMemo(() => computeLastContactDetailsByName(donations).get(name), [donations, name]);
 
   const familyList: FamilyMember[] = crmData.family || [];
   const donorNameList = React.useMemo(() => Object.keys(donors).filter(n => n !== name).sort((a, b) => a.localeCompare(b, 'he')), [donors, name]);
@@ -343,10 +344,17 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
         </div>
 
         {/* Last contact */}
-        <div className="bg-white rounded-xl p-3 shadow-sm mb-5 flex items-center justify-center gap-2">
-          <span className="text-base">🕐</span>
-          <span className="text-xs text-gray-500">יצירת קשר אחרונה:</span>
-          <span className="text-xs font-bold text-[#0D1B2A]">{formatLastContact(lastContactDate, new Date())}</span>
+        <div className="bg-white rounded-xl p-3 shadow-sm mb-5">
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-base">🕐</span>
+            <span className="text-xs text-gray-500">יצירת קשר אחרונה:</span>
+            <span className="text-xs font-bold text-[#0D1B2A]">{formatLastContact(lastContactDate, new Date())}</span>
+          </div>
+          {lastContactDetails && (lastContactDetails.meetType || lastContactDetails.purpose) && (
+            <div className="text-[10px] text-gray-400 text-center mt-1">
+              {[lastContactDetails.meetType, lastContactDetails.purpose].filter(Boolean).join(' · ')}
+            </div>
+          )}
         </div>
 
         {/* Important dates: birthdays + parents' yahrzeits */}
@@ -785,7 +793,19 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
         {/* History / Timeline */}
         {(() => {
           const events: any[] = [];
-          (donor.donations || []).forEach((don: any) => events.push({ type: 'donation', date: don.date, data: don }));
+          // חשוב: donor.meetings אף פעם לא מאוכלס בפועל באפליקציה — כל
+          // הרשומות (תרומות וגם מפגשים/נוכחות) נמצאות יחד במערך
+          // donor.donations, כאשר amount===0 מסמן רשומת "מפגש" (בדיוק כמו
+          // ב-computeLastContactByName/ReportsTab). בעבר זה גרם לכל רשומת
+          // מפגש/נוכחות להיראות כ"תרומה" מבלבלת על סך ₪0 — עכשיו מסווגים
+          // לפי הסכום בפועל, לא לפי מערך המקור.
+          (donor.donations || []).forEach((don: any) => {
+            if ((don.amount || 0) === 0) {
+              events.push({ type: 'meeting', date: don.date || don.meetDate, data: don });
+            } else {
+              events.push({ type: 'donation', date: don.date, data: don });
+            }
+          });
           (donor.meetings || []).forEach((m: any) => events.push({ type: 'meeting', date: m.date, data: m }));
           
           events.sort((a, b) => {

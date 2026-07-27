@@ -21,6 +21,7 @@ export function PosterTab({ onClose }: { onClose: () => void }) {
   const [shacharit, setShacharit] = useState('09:30');
   const [minchaShabbat, setMinchaShabbat] = useState('18:45');
   const [havdalah, setHavdalah] = useState('19:54');
+  const [subtitle, setSubtitle] = useState('');
   
   const [dateFriday, setDateFriday] = useState('');
   const [dateShabbat, setDateShabbat] = useState('');
@@ -70,6 +71,7 @@ export function PosterTab({ onClose }: { onClose: () => void }) {
       const paramMevarchim = shabbat.items.find((i: any) => i.category === 'mevarchim');
       if (paramMevarchim && !isMevarchimToggled.current) {
          setIsMevarchim(true);
+         setSubtitle(s => s || 'Шабат Мевархим');
       }
       
       if (parashaItem) {
@@ -196,6 +198,16 @@ export function PosterTab({ onClose }: { onClose: () => void }) {
                  }} className="w-4 h-4 text-[#C9A84C]" />
                  שבת מברכים (מציג תהילים)
               </label>
+           </div>
+           <div className="mb-4">
+              <label className="block text-xs font-bold text-gray-500 mb-1">כותרת משנה (למשל: שבת מברכים, שבת ראש חודש)</label>
+              <input
+                type="text"
+                value={subtitle}
+                onChange={e => setSubtitle(e.target.value)}
+                placeholder="השאר ריק אם אין כותרת משנה"
+                className="w-full border border-[#EDE6D6] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#C9A84C]"
+              />
            </div>
 
            {/* Background image upload */}
@@ -351,6 +363,11 @@ export function PosterTab({ onClose }: { onClose: () => void }) {
                            в синагоге «Хабад БаАлия»<br/>
                            ул. Бреннер, 2, Афула
                         </h3>
+                        {subtitle && (
+                           <div className="mt-3 inline-block bg-[#6B1A28] text-[#f4bc3a] text-[26px] font-black px-6 py-2 rounded-full tracking-wide">
+                              {subtitle}
+                           </div>
+                        )}
                      </div>
                   </div>
 

@@ -10,6 +10,8 @@ import { StandingOrdersModal } from './StandingOrdersModal';
 import { getCustomHols } from '../lib/api';
 import { computePersonalDateEvents } from '../lib/personalDates';
 import { countHkByStatus, isMonthlyReminderReviewed, markMonthlyReminderReviewed } from '../lib/standingOrders';
+import { HDate } from '@hebcal/core';
+import { toCanonicalHebrewString } from '../lib/hebrewDates';
 
 export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => void, onDonationClick: () => void }) {
   const { summary, donations, failures, hk, rebbeDate, crm, visibleDonors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras, eventsData, settings } = useAppStore();
@@ -199,6 +201,9 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
             <div className="font-['Frank_Ruhl_Libre'] text-2xl font-bold text-[#E8C97A]">
               {rebbeDate ? rebbeDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' }) : 'לא עודכן מעולם'}
             </div>
+            {rebbeDate && (
+              <div className="text-[11px] text-[#E8C97A]/70 mt-0.5">{toCanonicalHebrewString(new HDate(rebbeDate))}</div>
+            )}
             <div className="text-xs text-white/45 mt-1">מייל אחרון ל-ohel@ohelchabad.org</div>
             {diff !== null && <div className={`inline-block rounded-lg px-2.5 py-1 text-xs mt-2 border ${bg}`}>{urgency}לפני {diff} ימים</div>}
             <div className="mt-4">
