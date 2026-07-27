@@ -17,3 +17,16 @@ export function slashDateToDotDate(dmySlash: string): string {
   if (!dmySlash) return dmySlash;
   return dmySlash.replace(/\//g, '.');
 }
+
+// פענוח תאריך "dd/MM/yyyy" או "dd.MM.yyyy" (שני הפורמטים קיימים בפועל
+// באפליקציה) לאובייקט Date. מחזיר null אם לא ניתן לפענח.
+export function parseDMYDate(dmy: string): Date | null {
+  if (!dmy) return null;
+  const normalized = String(dmy).replace(/\./g, '/');
+  const parts = normalized.split('/');
+  if (parts.length !== 3) return null;
+  const [day, month, year] = parts.map(p => parseInt(p, 10));
+  if (!day || !month || !year) return null;
+  const d = new Date(year, month - 1, day);
+  return isNaN(d.getTime()) ? null : d;
+}

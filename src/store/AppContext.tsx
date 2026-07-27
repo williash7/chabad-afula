@@ -10,6 +10,7 @@ import { Donor, Donation, ReportSummary } from '../types';
 import { extractMerges, applyMergesToCrm, coalesceDonorsByMerges, resolveCanonicalName, MERGES_KEY } from '../lib/nameMerges';
 import { AppSettings, loadSettings, saveSettings, filterDonorsBySettings } from '../lib/settings';
 import { logAction } from '../lib/score';
+import { parseDMYDate } from '../lib/dateUtils';
 
 interface AppState {
   summary: ReportSummary | null;
@@ -76,9 +77,67 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // סינון "תרומות מתאריך X" — כשמוגדר, מחשבים מחדש את כל הסכומים (סה"כ
+  // תרומה לכל איש קשר, וסיכום הדשבורד) מתרומות מהתאריך הזה והלאה בלבד.
+  // חשוב: לא מסננים את מערך donations הגולמי עצמו (זה היה שובר תכונות
+  // אחרות כמו "יצירת קשר אחרונה" והיסטוריה מלאה) — רק מייצרים גרסה
+  // מחושבת-מחדש של donors/summary לתצוגה.
+  const donationsFromDate = settings.donationsFromDate;
+  const parseCutoff = (iso: string): Date | null => {
+    // input type="date" מחזיר "YYYY-MM-DD" — פרסור מפורש בזמן מקומי (לא UTC)
+    // כדי למנוע הזזה של יום לפי אזור זמן.
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    if (!m) return null;
+    const d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const dateFilteredTotals = React.useMemo(() => {
+    const cutoff = parseCutoff(donationsFromDate);
+    if (!cutoff) return null;
+    const totals: Record<string, number> = {};
+    donations.forEach((d: any) => {
+      if (!d.name || (d.amount || 0) <= 0 || !d.date) return;
+      const parsed = parseDMYDate(d.date);
+      if (!parsed || parsed < cutoff) return;
+      totals[d.name] = (totals[d.name] || 0) + d.amount;
+    });
+    return totals;
+  }, [donations, donationsFromDate]);
+
+  const effectiveDonors = React.useMemo(() => {
+    if (!dateFilteredTotals) return donors;
+    const result: Record<string, Donor> = {};
+    Object.keys(donors).forEach(name => {
+      result[name] = { ...donors[name], total: dateFilteredTotals[name] || 0 };
+    });
+    return result;
+  }, [donors, dateFilteredTotals]);
+
+  const effectiveSummary = React.useMemo(() => {
+    if (!dateFilteredTotals || !summary) return summary;
+    const cutoff = parseCutoff(donationsFromDate);
+    if (!cutoff) return summary;
+    let total = 0;
+    let thisMonthTotal = 0;
+    const byMethod: Record<string, number> = {};
+    const donorSet = new Set<string>();
+    const now = new Date();
+    donations.forEach((d: any) => {
+      if (!d.name || (d.amount || 0) <= 0 || !d.date) return;
+      const parsed = parseDMYDate(d.date);
+      if (!parsed || parsed < cutoff) return;
+      total += d.amount;
+      donorSet.add(d.name);
+      if (parsed.getFullYear() === now.getFullYear() && parsed.getMonth() === now.getMonth()) thisMonthTotal += d.amount;
+      const method = d.method || 'אחר';
+      byMethod[method] = (byMethod[method] || 0) + d.amount;
+    });
+    return { ...summary, total, thisMonthTotal, donorCount: donorSet.size, byMethod };
+  }, [summary, donations, dateFilteredTotals, donationsFromDate]);
+
   const visibleDonors = React.useMemo(
-    () => filterDonorsBySettings(donors, crm, settings),
-    [donors, crm, settings]
+    () => filterDonorsBySettings(effectiveDonors, crm, settings),
+    [effectiveDonors, crm, settings]
   );
 
   const loadHebcal = () => {
@@ -338,7 +397,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      summary, donations, donors, visibleDonors, hk, failures, rebbeDate,
+      summary: effectiveSummary, donations, donors: effectiveDonors, visibleDonors, hk, failures, rebbeDate,
       shabbat, holidays, hebrewDate,
       loading, loadingText, apiError, crm, holidayExtras, eventsData, nameMerges, refresh: loadAll,
       addManualDonation, updateCrm, updateHolidayExtras, updateEventsData, updateRebbeDate,

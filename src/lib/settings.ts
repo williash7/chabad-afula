@@ -1,8 +1,12 @@
 // הגדרות תצוגה גלובליות: אילו אנשי קשר להציג ברחבי האפליקציה (רשימת אנשי
 // קשר, המלצות ליצירת קשר בדשבורד, הזמנות לחג, נוכחות באירועים, טבלת
-// התורמים המובילים בדוחות). לא משפיע על סכומי הכסף/דוחות כספיים (אלה
-// מגיעים ישירות מהגיליון) ולא על מסכי "הוסף תרומה/מפגש" (שם תמיד רוצים
-// למצוא כל איש קשר, גם אם הוא מסונן מהתצוגה).
+// התורמים המובילים בדוחות). לא משפיע על מסכי "הוסף תרומה/מפגש" (שם תמיד
+// רוצים למצוא כל איש קשר, גם אם הוא מסונן מהתצוגה).
+//
+// donationsFromDate — יוצא דופן: זו הגדרה שכן משפיעה על סכומי כסף (בכוונה!)
+// — כשמוגדר, כל הסכומים המוצגים באפליקציה (סיכום הדשבורד, "סה"כ תרומות"
+// בכרטיס איש קשר וברשימת אנשי הקשר) מחושבים מחדש מתרומות מהתאריך הזה
+// והלאה בלבד, כדי לאפשר לראות "כמה נכנס מתאריך X".
 
 export interface AppSettings {
   visibleCircles: string[]; // 'close' | 'approach' | 'third' | 'far' | 'none' (ללא מעגל מוגדר)
@@ -13,6 +17,7 @@ export interface AppSettings {
   fbPageId: string;      // מזהה דף הפייסבוק
   fbAccessToken: string; // טוקן גישה לדף
   hkExpiringThreshold: number; // כמה חיובים נותרו כדי לסמן הוראת קבע כ"מסתיימת בקרוב"
+  donationsFromDate: string; // 'YYYY-MM-DD' או '' (ריק = ללא סינון, מציגים סכומים מכל הזמנים כרגיל)
 }
 
 export const ALL_CIRCLES = ['close', 'approach', 'third', 'far', 'none'];
@@ -34,6 +39,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fbPageId: '',
   fbAccessToken: '',
   hkExpiringThreshold: 2,
+  donationsFromDate: '',
 };
 
 const STORAGE_KEY = 'app_settings_v1';
