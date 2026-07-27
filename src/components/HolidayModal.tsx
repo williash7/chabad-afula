@@ -5,9 +5,11 @@ import { X, Check, MessageSquare, FileText, ExternalLink, Loader2, Download, Cli
 import { createInviteTask, inviteRemainingMinutes, toggleInvitePerson, MINUTES_PER_CALL } from '../lib/tasks';
 import { logAction } from '../lib/score';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
+import { findLatestHistoryFor } from '../lib/history';
+import { Archive } from 'lucide-react';
 
 export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () => void }) {
-  const { holidayExtras, updateHolidayExtras, visibleDonors, crm, hk, failures, refresh } = useAppStore();
+  const { holidayExtras, updateHolidayExtras, visibleDonors, crm, hk, failures, refresh, history, archiveOccurrence, importTasksFromHistory } = useAppStore();
   const [inviteCategory, setInviteCategory] = useState('all');
 
   // Use either the real id or fallback to stringified name for custom holidays
@@ -396,6 +398,18 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
           </div>
         </div>
 
+        {/* העברה להיסטוריה — שומר תמונת מצב (משימות/נוכחות/תקציב) ומרוקן את
+            המשימות החיות כדי שהמופע הבא (השנה הבאה) יתחיל נקי */}
+        <button
+          onClick={() => {
+            if (!confirm(`להעביר את "${holiday.name}" להיסטוריה? המשימות הנוכחיות יישמרו בהיסטוריה ויתאפסו כדי שאפשר יהיה לתכנן מחדש לשנה הבאה (עם אפשרות לייבא אותן בחזרה).`)) return;
+            archiveOccurrence({ type: 'holiday', id, name: holiday.name, occurrenceDate: holiday.dateStr });
+          }}
+          className="w-full flex items-center justify-center gap-1.5 bg-[#0D1B2A]/5 text-[#0D1B2A]/70 text-xs font-bold py-2 rounded-xl mb-4 hover:bg-[#0D1B2A]/10 transition-colors"
+        >
+          <Archive size={13} /> סמן חג זה כהסתיים והעבר להיסטוריה
+        </button>
+
         <div className="bg-gradient-to-br from-[#2D1B69] to-[#4A2E8C] rounded-2xl p-4 text-white mb-5 flex items-center gap-4 relative overflow-hidden">
           <div className="text-4xl relative z-10">{holiday.emoji || '📅'}</div>
           <div className="flex-1 relative z-10">
@@ -462,6 +476,14 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A]">📋 משימות</h3>
           </div>
+          {(!extra.tasks || extra.tasks.length === 0) && findLatestHistoryFor(history, 'holiday', holiday.name) && (
+            <button
+              onClick={() => importTasksFromHistory({ type: 'holiday', id, name: holiday.name })}
+              className="w-full flex items-center justify-center gap-1.5 bg-blue-50 text-blue-700 text-sm font-bold py-2.5 rounded-xl mb-3"
+            >
+              <ClipboardList size={14} /> ייבא משימות מהפעם הקודמת
+            </button>
+          )}
           <div className="space-y-2 mb-3">
             {extra.tasks?.length > 0 ? extra.tasks.map((t: any, i: number) => (
               t.kind === 'invite' ? (

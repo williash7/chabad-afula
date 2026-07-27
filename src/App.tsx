@@ -12,6 +12,8 @@ import { PosterTab } from './components/PosterTab';
 import { SettingsTab } from './components/SettingsTab';
 import { TasksTab } from './components/TasksTab';
 import { ScoreTab } from './components/ScoreTab';
+import { DonationsTab } from './components/DonationsTab';
+import { HistoryTab } from './components/HistoryTab';
 import { DonationModal } from './components/DonationModal';
 import { ProfileModal } from './components/ProfileModal';
 import { Plus } from 'lucide-react';
@@ -62,8 +64,10 @@ function AppContent() {
         <main className="flex-1 min-w-0 pb-20 md:pb-6">
           {activeTab === 'home' && <HomeTab setTab={setActiveTab} onDonationClick={() => setIsDonationOpen(true)} />}
           {activeTab === 'donors' && <DonorsTab addTrigger={addTrigger} />}
+          {activeTab === 'donations' && <DonationsTab />}
           {activeTab === 'events' && <EventsTab addTrigger={addTrigger} />}
           {activeTab === 'calendar' && <CalendarTab addTrigger={addTrigger} />}
+          {activeTab === 'history' && <HistoryTab />}
           {activeTab === 'reports' && <ReportsTab />}
           {activeTab === 'poster' && <PosterTab onClose={() => setActiveTab('home')} />}
           {activeTab === 'tasks' && <TasksTab setTab={setActiveTab} addTrigger={addTrigger} />}

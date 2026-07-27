@@ -18,15 +18,20 @@ export function slashDateToDotDate(dmySlash: string): string {
   return dmySlash.replace(/\//g, '.');
 }
 
-// פענוח תאריך "dd/MM/yyyy" או "dd.MM.yyyy" (שני הפורמטים קיימים בפועל
-// באפליקציה) לאובייקט Date. מחזיר null אם לא ניתן לפענח.
-export function parseDMYDate(dmy: string): Date | null {
-  if (!dmy) return null;
-  const normalized = String(dmy).replace(/\./g, '/');
-  const parts = normalized.split('/');
-  if (parts.length !== 3) return null;
-  const [day, month, year] = parts.map(p => parseInt(p, 10));
-  if (!day || !month || !year) return null;
-  const d = new Date(year, month - 1, day);
-  return isNaN(d.getTime()) ? null : d;
+// מפענח תאריך "dd/MM/yyyy" (או עם נקודות/מקפים) לאובייקט Date. מחזיר null אם
+// אי אפשר לפענח — כך שקוד קורא יכול להחליט להתייחס לרשומה כ"לא מסוננת" במקום
+// לזרוק שגיאה או להסתיר בטעות רשומה עם תאריך תקין אך בפורמט לא צפוי.
+export function parseDdMmYyyy(dateStr?: string | null): Date | null {
+  if (!dateStr) return null;
+  const s = String(dateStr).trim();
+  const m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+  if (m) {
+    const [, d, mo, y] = m;
+    const yyyy = y.length === 2 ? `20${y}` : y;
+    const dt = new Date(Number(yyyy), Number(mo) - 1, Number(d));
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+  // ISO ("yyyy-MM-dd") או פורמטים אחרים ש-Date יודע לפענח בעצמו
+  const dt = new Date(s);
+  return isNaN(dt.getTime()) ? null : dt;
 }

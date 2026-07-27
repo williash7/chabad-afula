@@ -108,34 +108,6 @@ export function SettingsTab() {
         </div>
 
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#EDE6D6]">
-          <h3 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A] mb-1">💰 תרומות מתאריך</h3>
-          <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
-            כשמוגדר תאריך, כל הסכומים באפליקציה (סיכום הדשבורד, "סה"כ תרומות" בכרטיס איש קשר וברשימת אנשי הקשר) מחושבים מחדש רק מתרומות מהתאריך הזה והלאה — כדי לראות "כמה נכנס מתאריך X". השארה ריקה מציגה סכומים מכל הזמנים כרגיל.
-          </p>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={settings.donationsFromDate || ''}
-              onChange={e => updateSettings({ donationsFromDate: e.target.value })}
-              className="flex-1 border border-[#EDE6D6] rounded-lg px-3 py-2 text-sm outline-none focus:border-[#C9A84C]"
-            />
-            {settings.donationsFromDate && (
-              <button
-                onClick={() => updateSettings({ donationsFromDate: '' })}
-                className="shrink-0 bg-gray-100 text-gray-600 rounded-lg px-3 py-2 text-xs font-bold hover:bg-gray-200 transition-colors"
-              >
-                נקה סינון
-              </button>
-            )}
-          </div>
-          {settings.donationsFromDate && (
-            <div className="text-[11px] text-[#9B7A2F] font-semibold mt-2">
-              ✓ פעיל — מוצגים סכומים מ-{new Date(settings.donationsFromDate).toLocaleDateString('he-IL')} ואילך בלבד
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#EDE6D6]">
           <h3 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A] mb-1">מעגל קרבה</h3>
           <p className="text-[11px] text-gray-400 mb-3">אילו רמות קשר להציג</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -154,6 +126,36 @@ export function SettingsTab() {
               );
             })}
           </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#EDE6D6] space-y-3">
+          <div>
+            <h3 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A]">טווח תאריכים לסכומי תרומות</h3>
+            <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">
+              קובע מאיזה תאריך סופרים תרומות בכל הסכומים המוצגים באפליקציה — בדשבורד ("סה"כ תרומות"), אצל אנשי הקשר (כמה כל אחד תרם) ובדוחות. השארה ריקה = כל הזמנים.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={settings.donationsSinceDate}
+              onChange={e => updateSettings({ donationsSinceDate: e.target.value })}
+              className="flex-1 bg-gray-50 border border-[#EDE6D6] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A84C]"
+            />
+            {settings.donationsSinceDate && (
+              <button
+                onClick={() => updateSettings({ donationsSinceDate: '' })}
+                className="shrink-0 px-3 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-200 transition-colors"
+              >
+                נקה (כל הזמנים)
+              </button>
+            )}
+          </div>
+          {settings.donationsSinceDate && (
+            <div className="text-[11px] text-[#9B7A2F] font-semibold">
+              ✓ כרגע מוצגות תרומות מ-{new Date(settings.donationsSinceDate).toLocaleDateString('he-IL')} ואילך בלבד
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#EDE6D6] space-y-4">

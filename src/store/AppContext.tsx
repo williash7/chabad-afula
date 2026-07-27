@@ -5,18 +5,21 @@ import {
   getEventsDataCloud, saveEventsDataCloud,
   getHolidayExtrasCloud, saveHolidayExtrasCloud,
   getManualDonations, saveManualDonations,
+  getHistoryDataCloud, saveHistoryDataCloud,
 } from '../lib/api';
 import { Donor, Donation, ReportSummary } from '../types';
 import { extractMerges, applyMergesToCrm, coalesceDonorsByMerges, resolveCanonicalName, MERGES_KEY } from '../lib/nameMerges';
 import { AppSettings, loadSettings, saveSettings, filterDonorsBySettings } from '../lib/settings';
 import { logAction } from '../lib/score';
-import { parseDMYDate } from '../lib/dateUtils';
+import { computeSummarySince, computeDonorTotalSince } from '../lib/donationFilter';
+import { HistoryEntry, buildHistoryEntry, countAttendance, sumBudget, findLatestHistoryFor, tasksFromHistory } from '../lib/history';
 
 interface AppState {
   summary: ReportSummary | null;
+  effectiveSummary: ReportSummary | null; // summary מסונן לפי settings.donationsSinceDate (או summary הרגיל אם אין סינון)
   donations: Donation[];
   donors: Record<string, Donor>;
-  visibleDonors: Record<string, Donor>;
+  visibleDonors: Record<string, Donor>; // מסונן לפי הגדרות תצוגה + total מחושב לפי donationsSinceDate
   hk: any[];
   failures: any[];
   rebbeDate: Date | null;
@@ -29,6 +32,7 @@ interface AppState {
   crm: Record<string, any>;
   holidayExtras: Record<string, any>;
   eventsData: any[];
+  history: HistoryEntry[];
   nameMerges: Record<string, string>;
   settings: AppSettings;
   updateSettings: (partial: Partial<AppSettings>) => void;
@@ -40,6 +44,9 @@ interface AppState {
   updateRebbeDate: (date: Date) => void;
   mergeContacts: (aliasName: string, canonicalName: string) => void;
   unmergeContact: (aliasName: string) => void;
+  archiveOccurrence: (params: { type: 'holiday' | 'event'; id: string; name: string; occurrenceDate?: string }) => void;
+  importTasksFromHistory: (params: { type: 'holiday' | 'event'; id: string; name: string }) => boolean;
+  updateHistoryEntry: (id: string, data: Partial<HistoryEntry>) => void;
 }
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -67,6 +74,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [nameMerges, setNameMerges] = useState<Record<string, string>>(initialCrm.merges);
   const [holidayExtras, setHolidayExtras] = useState<Record<string, any>>({});
   const [eventsData, setEventsData] = useState<any[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [settings, setSettings] = useState<AppSettings>(loadSettings());
 
   const updateSettings = (partial: Partial<AppSettings>) => {
@@ -77,68 +85,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // סינון "תרומות מתאריך X" — כשמוגדר, מחשבים מחדש את כל הסכומים (סה"כ
-  // תרומה לכל איש קשר, וסיכום הדשבורד) מתרומות מהתאריך הזה והלאה בלבד.
-  // חשוב: לא מסננים את מערך donations הגולמי עצמו (זה היה שובר תכונות
-  // אחרות כמו "יצירת קשר אחרונה" והיסטוריה מלאה) — רק מייצרים גרסה
-  // מחושבת-מחדש של donors/summary לתצוגה.
-  const donationsFromDate = settings.donationsFromDate;
-  const parseCutoff = (iso: string): Date | null => {
-    // input type="date" מחזיר "YYYY-MM-DD" — פרסור מפורש בזמן מקומי (לא UTC)
-    // כדי למנוע הזזה של יום לפי אזור זמן.
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
-    if (!m) return null;
-    const d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
-    return isNaN(d.getTime()) ? null : d;
-  };
-  const dateFilteredTotals = React.useMemo(() => {
-    const cutoff = parseCutoff(donationsFromDate);
-    if (!cutoff) return null;
-    const totals: Record<string, number> = {};
-    donations.forEach((d: any) => {
-      if (!d.name || (d.amount || 0) <= 0 || !d.date) return;
-      const parsed = parseDMYDate(d.date);
-      if (!parsed || parsed < cutoff) return;
-      totals[d.name] = (totals[d.name] || 0) + d.amount;
+  const visibleDonors = React.useMemo(() => {
+    const filtered = filterDonorsBySettings(donors, crm, settings);
+    if (!settings.donationsSinceDate) return filtered;
+    const withFilteredTotals: Record<string, Donor> = {};
+    Object.keys(filtered).forEach(name => {
+      const d = filtered[name];
+      withFilteredTotals[name] = { ...d, total: computeDonorTotalSince(d.donations, settings.donationsSinceDate) };
     });
-    return totals;
-  }, [donations, donationsFromDate]);
+    return withFilteredTotals;
+  }, [donors, crm, settings]);
 
-  const effectiveDonors = React.useMemo(() => {
-    if (!dateFilteredTotals) return donors;
-    const result: Record<string, Donor> = {};
-    Object.keys(donors).forEach(name => {
-      result[name] = { ...donors[name], total: dateFilteredTotals[name] || 0 };
-    });
-    return result;
-  }, [donors, dateFilteredTotals]);
-
+  // כשיש "תאריך התחלה" בהגדרות — מחשבים תקציר בצד הלקוח מתוך רשימת התרומות
+  // הגולמית (במקום סתם להציג את summary מהשרת, שהוא תמיד מתחילת השנה/הכל).
   const effectiveSummary = React.useMemo(() => {
-    if (!dateFilteredTotals || !summary) return summary;
-    const cutoff = parseCutoff(donationsFromDate);
-    if (!cutoff) return summary;
-    let total = 0;
-    let thisMonthTotal = 0;
-    const byMethod: Record<string, number> = {};
-    const donorSet = new Set<string>();
-    const now = new Date();
-    donations.forEach((d: any) => {
-      if (!d.name || (d.amount || 0) <= 0 || !d.date) return;
-      const parsed = parseDMYDate(d.date);
-      if (!parsed || parsed < cutoff) return;
-      total += d.amount;
-      donorSet.add(d.name);
-      if (parsed.getFullYear() === now.getFullYear() && parsed.getMonth() === now.getMonth()) thisMonthTotal += d.amount;
-      const method = d.method || 'אחר';
-      byMethod[method] = (byMethod[method] || 0) + d.amount;
-    });
-    return { ...summary, total, thisMonthTotal, donorCount: donorSet.size, byMethod };
-  }, [summary, donations, dateFilteredTotals, donationsFromDate]);
-
-  const visibleDonors = React.useMemo(
-    () => filterDonorsBySettings(effectiveDonors, crm, settings),
-    [effectiveDonors, crm, settings]
-  );
+    if (!settings.donationsSinceDate) return summary;
+    const since = computeSummarySince(donations, settings.donationsSinceDate);
+    return { ...(summary || {}), ...since } as ReportSummary;
+  }, [summary, donations, settings.donationsSinceDate]);
 
   const loadHebcal = () => {
     fetch('https://www.hebcal.com/shabbat?cfg=json&city=Afula&M=on')
@@ -190,7 +154,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getCRMDataCloud(),
       getEventsDataCloud(),
       getHolidayExtrasCloud(),
-    ]).then(([cloudCrm, cloudEvents, cloudExtras]) => {
+      getHistoryDataCloud(),
+    ]).then(([cloudCrm, cloudEvents, cloudExtras, cloudHistory]) => {
       const { merges, crmRest } = extractMerges(cloudCrm);
       const cleanedCrm = applyMergesToCrm(crmRest, merges);
       resolvedCrm = cleanedCrm;
@@ -199,6 +164,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setNameMerges(merges);
       setEventsData(cloudEvents);
       setHolidayExtras(cloudExtras);
+      setHistory(cloudHistory || []);
     }).catch(console.error);
 
     try {
@@ -381,6 +347,71 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     saveEventsDataCloud(data);
   };
 
+  const updateHistoryEntry = (id: string, data: Partial<HistoryEntry>) => {
+    setHistory(prev => {
+      const next = prev.map(h => (h.id === id ? { ...h, ...data } : h));
+      saveHistoryDataCloud(next);
+      return next;
+    });
+  };
+
+  // מסמן חג/אירוע כ"הסתיים": שומר תמונת מצב (משימות/נוכחות/תקציב) בהיסטוריה,
+  // ומרוקן את המשימות (ואת הנוכחות) החיות כדי שהמופע הבא יתחיל נקי.
+  // גם ממלא אוטומטית את שדה "אשתקד" עם המספרים האמיתיים שהתקבלו, לקראת השנה הבאה.
+  const archiveOccurrence = ({ type, id, name, occurrenceDate }: { type: 'holiday' | 'event'; id: string; name: string; occurrenceDate?: string }) => {
+    if (type === 'holiday') {
+      const extra = holidayExtras[id] || {};
+      const entry = buildHistoryEntry({
+        type, name, occurrenceDate,
+        tasks: extra.tasks, attendance: extra.attendance, budget: extra.budget, insights: extra.insights,
+      });
+      setHistory(prev => {
+        const next = [...prev, entry];
+        saveHistoryDataCloud(next);
+        return next;
+      });
+      const attCount = countAttendance(extra.attendance);
+      const budgetSums = sumBudget(extra.budget);
+      updateHolidayExtras(id, {
+        tasks: [],
+        attendance: {},
+        insights: { good: '', improve: '', plan: '' },
+        lastYear: { donors: attCount || extra.lastYear?.donors || '', amount: budgetSums.actualIncome || extra.lastYear?.amount || '' },
+      });
+    } else {
+      const ev = eventsData.find((e: any) => e.id === id);
+      if (!ev) return;
+      const entry = buildHistoryEntry({
+        type, name, occurrenceDate,
+        tasks: ev.tasks, attendance: ev.attendance, budget: ev.budget,
+      });
+      setHistory(prev => {
+        const next = [...prev, entry];
+        saveHistoryDataCloud(next);
+        return next;
+      });
+      updateEventsData(eventsData.map((e: any) => (e.id === id ? { ...e, tasks: [], attendance: {} } : e)));
+    }
+    logAction('history_archive');
+  };
+
+  // מייבא משימות מהמופע הקודם (מההיסטוריה) כמשימות חדשות (done:false)
+  const importTasksFromHistory = ({ type, id, name }: { type: 'holiday' | 'event'; id: string; name: string }): boolean => {
+    const latest = findLatestHistoryFor(history, type, name);
+    if (!latest || (latest.tasks || []).length === 0) return false;
+    const importedTasks = tasksFromHistory(latest);
+    if (type === 'holiday') {
+      const extra = holidayExtras[id] || {};
+      updateHolidayExtras(id, { tasks: [...(extra.tasks || []), ...importedTasks] });
+    } else {
+      const ev = eventsData.find((e: any) => e.id === id);
+      if (!ev) return false;
+      updateEventsData(eventsData.map((e: any) => (e.id === id ? { ...e, tasks: [...(e.tasks || []), ...importedTasks] } : e)));
+    }
+    logAction('task_create', importedTasks.length);
+    return true;
+  };
+
   const updateRebbeDate = async (date: Date) => {
     setRebbeDate(date);
     localStorage.setItem('rebbe_date', date.toISOString());
@@ -397,11 +428,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      summary: effectiveSummary, donations, donors: effectiveDonors, visibleDonors, hk, failures, rebbeDate,
+      summary, effectiveSummary, donations, donors, visibleDonors, hk, failures, rebbeDate,
       shabbat, holidays, hebrewDate,
-      loading, loadingText, apiError, crm, holidayExtras, eventsData, nameMerges, refresh: loadAll,
+      loading, loadingText, apiError, crm, holidayExtras, eventsData, history, nameMerges, refresh: loadAll,
       addManualDonation, updateCrm, updateHolidayExtras, updateEventsData, updateRebbeDate,
       mergeContacts, unmergeContact, settings, updateSettings,
+      archiveOccurrence, importTasksFromHistory, updateHistoryEntry,
     }}>
       {children}
     </AppContext.Provider>

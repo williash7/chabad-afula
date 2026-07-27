@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Plus, Check, X, ClipboardList, Trash2, Pencil, Clock } from 'lucide-react';
+import { Plus, Check, X, ClipboardList, Trash2, Pencil, Clock, Archive } from 'lucide-react';
 import { format } from 'date-fns';
 import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL, nextEventOccurrence, formatRemaining, createEventMediaTasks } from '../lib/tasks';
 import { logAction } from '../lib/score';
 import { slashDateToDotDate } from '../lib/dateUtils';
+import { findLatestHistoryFor } from '../lib/history';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
 import { FacebookPostAssistant } from './FacebookPostAssistant';
 
 export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: number } } = {}) {
-  const { eventsData, updateEventsData, visibleDonors, crm, hk, failures, settings, refresh } = useAppStore();
+  const { eventsData, updateEventsData, visibleDonors, crm, hk, failures, settings, refresh, history, archiveOccurrence, importTasksFromHistory } = useAppStore();
   const [filter, setFilter] = useState('all');
   const [isAddingMode, setIsAddingMode] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -497,7 +498,25 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                <button onClick={() => setTasksEventId(null)} className="bg-gray-200/50 p-2 rounded-full text-gray-500 hover:bg-gray-200 shrink-0"><X size={16}/></button>
              </div>
 
+             <button
+               onClick={() => {
+                 if (!confirm(`להעביר את "${currentTasksEvent.name}" להיסטוריה? הנוכחות והמשימות הנוכחיות יישמרו בהיסטוריה ויתאפסו כדי להתחיל נקי בפעם הבאה (עם אפשרות לייבא משימות בחזרה).`)) return;
+                 archiveOccurrence({ type: 'event', id: currentTasksEvent.id, name: currentTasksEvent.name });
+               }}
+               className="w-full flex items-center justify-center gap-1.5 bg-[#0D1B2A]/5 text-[#0D1B2A]/70 text-xs font-bold py-2 rounded-xl mb-3 shrink-0 hover:bg-[#0D1B2A]/10 transition-colors"
+             >
+               <Archive size={13} /> סמן מופע זה כהסתיים והעבר להיסטוריה
+             </button>
+
              <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-3">
+             {(!currentTasksEvent.tasks || currentTasksEvent.tasks.length === 0) && findLatestHistoryFor(history, 'event', currentTasksEvent.name) && (
+               <button
+                 onClick={() => importTasksFromHistory({ type: 'event', id: currentTasksEvent.id, name: currentTasksEvent.name })}
+                 className="w-full flex items-center justify-center gap-1.5 bg-blue-50 text-blue-700 text-sm font-bold py-2.5 rounded-xl"
+               >
+                 <ClipboardList size={14} /> ייבא משימות מהפעם הקודמת
+               </button>
+             )}
              <div className="space-y-2">
                {(currentTasksEvent.tasks || []).length === 0 && (
                  <div className="text-sm text-gray-400 text-center bg-white rounded-xl p-4 border border-[#EDE6D6]">אין עדיין משימות לאירוע הזה</div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, CalendarDays, PieChart, CalendarCheck, Plus, ImageIcon, RefreshCw, Settings, ClipboardList, TrendingUp } from 'lucide-react';
+import { Home, Users, CalendarDays, PieChart, CalendarCheck, Plus, ImageIcon, RefreshCw, Settings, ClipboardList, TrendingUp, HandCoins, History } from 'lucide-react';
 import { useAppStore } from '../store/AppContext';
 
 interface SideNavProps {
@@ -10,18 +10,20 @@ interface SideNavProps {
 }
 
 export function SideNav({ currentTab, setTab, onDonationClick, addLabel }: SideNavProps) {
-  const { hebrewDate, summary, refresh } = useAppStore();
+  const { hebrewDate, effectiveSummary, refresh } = useAppStore();
 
   const navItems = [
-    { id: 'home',     icon: Home,         label: 'דשבורד' },
-    { id: 'tasks',    icon: ClipboardList, label: 'משימות' },
-    { id: 'score',    icon: TrendingUp,    label: 'ניקוד' },
-    { id: 'donors',   icon: Users,         label: 'אנשי קשר' },
-    { id: 'events',   icon: CalendarCheck, label: 'אירועים' },
-    { id: 'calendar', icon: CalendarDays,  label: 'חגים' },
-    { id: 'reports',  icon: PieChart,      label: 'דוחות' },
-    { id: 'poster',   icon: ImageIcon,     label: 'פוסטר שבת' },
-    { id: 'settings', icon: Settings,      label: 'הגדרות' },
+    { id: 'home',      icon: Home,         label: 'דשבורד' },
+    { id: 'tasks',     icon: ClipboardList, label: 'משימות' },
+    { id: 'score',     icon: TrendingUp,    label: 'ניקוד' },
+    { id: 'donors',    icon: Users,         label: 'אנשי קשר' },
+    { id: 'donations', icon: HandCoins,     label: 'תרומות' },
+    { id: 'events',    icon: CalendarCheck, label: 'אירועים' },
+    { id: 'calendar',  icon: CalendarDays,  label: 'חגים' },
+    { id: 'history',   icon: History,       label: 'היסטוריה' },
+    { id: 'reports',   icon: PieChart,      label: 'דוחות' },
+    { id: 'poster',    icon: ImageIcon,     label: 'פוסטר שבת' },
+    { id: 'settings',  icon: Settings,      label: 'הגדרות' },
   ];
 
   return (
@@ -40,13 +42,13 @@ export function SideNav({ currentTab, setTab, onDonationClick, addLabel }: SideN
         </div>
 
         {/* Quick summary */}
-        {summary && (
+        {effectiveSummary && (
           <div className="mt-4 bg-white/5 rounded-xl p-3 border border-white/10">
             <div className="text-[10px] text-white/40 uppercase tracking-wide mb-1">סה"כ תרומות</div>
             <div className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#E8C97A]">
-              ₪{summary.total?.toLocaleString() || 0}
+              ₪{effectiveSummary.total?.toLocaleString() || 0}
             </div>
-            <div className="text-[10px] text-white/30 mt-0.5">החודש: ₪{summary.thisMonthTotal?.toLocaleString() || 0}</div>
+            <div className="text-[10px] text-white/30 mt-0.5">החודש: ₪{effectiveSummary.thisMonthTotal?.toLocaleString() || 0}</div>
           </div>
         )}
       </div>

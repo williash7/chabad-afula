@@ -16,6 +16,7 @@ import {
 } from '../lib/donorDates';
 import { toCanonicalHebrewString, parseCanonicalHebrewString, hebrewToGregorianCompanion, gregorianToHebrewCompanion } from '../lib/hebrewDates';
 import { computeLastContactByName, computeLastContactDetailsByName, formatLastContact } from '../lib/contactFocus';
+import { computeDonorTotalSince, filterDonationsSince } from '../lib/donationFilter';
 
 interface FamilyMember {
   id: string;
@@ -26,7 +27,7 @@ interface FamilyMember {
 }
 
 export function ProfileModal({ name, onClose }: { name: string, onClose: () => void }) {
-  const { donors, crm, donations, updateCrm, refresh } = useAppStore();
+  const { donors, crm, donations, updateCrm, refresh, settings } = useAppStore();
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
   const [isEditingFields, setIsEditingFields] = useState(false);
@@ -48,6 +49,12 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
 
   const donor = donors[name] || { name, total: 0, donations: [], lastDate: '' };
   const crmData = crm[name] || { circle: 'far', target: false, phone: '' };
+  // "סה"כ" ו"מספר תרומות" בכרטיס — מסונן לפי טווח התאריכים הגלובלי מההגדרות (אם הוגדר)
+  const displayTotal = React.useMemo(() => computeDonorTotalSince(donor.donations, settings.donationsSinceDate), [donor.donations, settings.donationsSinceDate]);
+  const displayDonationsCount = React.useMemo(
+    () => filterDonationsSince((donor.donations || []).filter((d: any) => (d.amount || 0) > 0), settings.donationsSinceDate).length,
+    [donor.donations, settings.donationsSinceDate]
+  );
   const lastContactDate = React.useMemo(() => computeLastContactByName(donations).get(name), [donations, name]);
   const lastContactDetails = React.useMemo(() => computeLastContactDetailsByName(donations).get(name), [donations, name]);
 
@@ -330,11 +337,11 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
         {/* Stats */}
         <div className="grid grid-cols-3 gap-2 bg-white rounded-2xl p-4 shadow-sm mb-5 divide-x-reverse divide-[#EDE6D6] divide-x">
           <div className="text-center px-2">
-            <div className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A]">₪{(donor.total||0).toLocaleString()}</div>
-            <div className="text-[10px] text-gray-500">סהכ</div>
+            <div className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A]">₪{displayTotal.toLocaleString()}</div>
+            <div className="text-[10px] text-gray-500">{settings.donationsSinceDate ? `סהכ מ-${new Date(settings.donationsSinceDate).toLocaleDateString('he-IL')}` : 'סהכ'}</div>
           </div>
           <div className="text-center px-2">
-            <div className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A]">{donor.donations?.length || 0}</div>
+            <div className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A]">{displayDonationsCount}</div>
             <div className="text-[10px] text-gray-500">תרומות</div>
           </div>
           <div className="text-center px-2">

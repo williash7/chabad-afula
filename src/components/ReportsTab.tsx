@@ -5,7 +5,7 @@ import { Donor } from '../types';
 import { StandingOrdersModal } from './StandingOrdersModal';
 
 export function ReportsTab() {
-  const { summary, donations, visibleDonors, crm, refresh } = useAppStore();
+  const { summary, effectiveSummary, donations, visibleDonors, crm, refresh, settings } = useAppStore();
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isHkOpen, setIsHkOpen] = useState(false);
   const [showAllDonations, setShowAllDonations] = useState(true);
@@ -19,8 +19,8 @@ export function ReportsTab() {
 
   if (!summary) return null;
 
-  const total = summary.total || 1;
-  const methods = Object.entries(summary.byMethod || {}).sort((a, b) => (b[1] as number) - (a[1] as number));
+  const total = effectiveSummary?.total || 1;
+  const methods = Object.entries(effectiveSummary?.byMethod || {}).sort((a, b) => (b[1] as number) - (a[1] as number));
 
   const topDonors: Donor[] = (Object.values(visibleDonors) as Donor[])
     .sort((a: Donor, b: Donor) => (b.total || 0) - (a.total || 0))
@@ -113,9 +113,9 @@ export function ReportsTab() {
         {/* Summary KPIs — always 4-column row on desktop */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 md:mb-6">
           {([
-            { emoji: '💰', label: 'סה"כ תרומות', value: `₪${(summary.total || 0).toLocaleString()}` },
-            { emoji: '📅', label: 'החודש', value: `₪${(summary.thisMonthTotal || 0).toLocaleString()}` },
-            { emoji: '👥', label: 'תורמים', value: String(summary.donorCount || 0) },
+            { emoji: '💰', label: settings.donationsSinceDate ? `סה"כ מ-${new Date(settings.donationsSinceDate).toLocaleDateString('he-IL')}` : 'סה"כ תרומות', value: `₪${(effectiveSummary?.total || 0).toLocaleString()}` },
+            { emoji: '📅', label: 'החודש', value: `₪${(effectiveSummary?.thisMonthTotal || 0).toLocaleString()}` },
+            { emoji: '👥', label: 'תורמים', value: String(effectiveSummary?.donorCount || 0) },
             { emoji: '🔄', label: 'הוראות קבע', value: String(summary.hkActive || 0), onClick: () => setIsHkOpen(true) },
           ] as { emoji: string; label: string; value: string; onClick?: () => void }[]).map((item, i) => (
             <div

@@ -14,7 +14,7 @@ import { HDate } from '@hebcal/core';
 import { toCanonicalHebrewString } from '../lib/hebrewDates';
 
 export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => void, onDonationClick: () => void }) {
-  const { summary, donations, failures, hk, rebbeDate, crm, visibleDonors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras, eventsData, settings } = useAppStore();
+  const { summary, effectiveSummary, donations, failures, hk, rebbeDate, crm, visibleDonors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras, eventsData, settings } = useAppStore();
   const [selectedDonor, setSelectedDonor] = useState<string | null>(null);
   const [selectedHoliday, setSelectedHoliday] = useState<any | null>(null);
   const [isRebbeEditOpen, setIsRebbeEditOpen] = useState(false);
@@ -224,19 +224,19 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
       <div className="flex items-center justify-between mb-1">
         <div className="text-[11px] text-white/60 uppercase tracking-widest flex items-center gap-1.5 cursor-pointer"
           onClick={() => alert('הסכום משקף את כל התרומות והוראות הקבע שחויבו בפועל. הסכום אינו כולל חיובים שסורבו ע"י חברת האשראי.')}>
-          <span>סה"כ תרומות מתחילת השנה</span>
+          <span>{settings.donationsSinceDate ? `סה"כ תרומות מ-${new Date(settings.donationsSinceDate).toLocaleDateString('he-IL')}` : 'סה"כ תרומות מתחילת השנה'}</span>
           <Info size={12} className="text-white/40" />
         </div>
       </div>
       <div className="font-['Frank_Ruhl_Libre'] text-4xl font-black text-[#E8C97A] leading-none mb-1">
-        <span className="text-xl font-normal ml-1">₪</span>{summary?.total?.toLocaleString() || 0}
+        <span className="text-xl font-normal ml-1">₪</span>{effectiveSummary?.total?.toLocaleString() || 0}
       </div>
       <div className="flex items-center justify-between text-xs text-white/45">
-        <div>החודש: ₪{summary?.thisMonthTotal?.toLocaleString() || 0} · {summary?.donorCount || 0} אנשי קשר תרמו</div>
+        <div>החודש: ₪{effectiveSummary?.thisMonthTotal?.toLocaleString() || 0} · {effectiveSummary?.donorCount || 0} אנשי קשר תרמו</div>
       </div>
       <div className="text-[9px] text-white/30 mt-1 opacity-80">(כולל הו"ק. ללא עסקאות שסורבו)</div>
       <div className="flex flex-wrap gap-2 mt-3">
-        {summary?.byMethod && Object.entries(summary.byMethod).map(([method, amount], i) => (
+        {effectiveSummary?.byMethod && Object.entries(effectiveSummary.byMethod).map(([method, amount], i) => (
           <div key={method} onClick={() => setSelectedMethodForDetails(method)}
             className="bg-white/5 border border-white/10 rounded-full px-3 py-1 text-[11px] text-white/65 flex items-center gap-1.5 cursor-pointer hover:bg-white/10 transition-colors">
             <div className={`w-1.5 h-1.5 rounded-full ${i === 0 ? 'bg-amber-500' : i === 1 ? 'bg-blue-500' : i === 2 ? 'bg-emerald-500' : 'bg-purple-500'}`} />
@@ -253,7 +253,7 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
       <div className="bg-white rounded-xl p-3.5 shadow-sm cursor-pointer active:scale-95 transition-transform hover:border hover:border-[#C9A84C]/30"
         onClick={() => setTab('donors')}>
         <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">תורמים</div>
-        <div className="font-['Frank_Ruhl_Libre'] text-3xl font-bold text-[#0D1B2A] leading-none mb-1">{summary?.donorCount || 0}</div>
+        <div className="font-['Frank_Ruhl_Libre'] text-3xl font-bold text-[#0D1B2A] leading-none mb-1">{effectiveSummary?.donorCount || 0}</div>
         <div className="text-[11px] text-[#9B7A2F] font-medium flex items-center gap-1">פעילים <ChevronLeft size={11} /></div>
       </div>
       <div className="bg-white rounded-xl p-3.5 shadow-sm cursor-pointer active:scale-95 transition-transform hover:border hover:border-[#C9A84C]/30"
