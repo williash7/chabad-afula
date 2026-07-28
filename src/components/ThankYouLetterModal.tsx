@@ -132,34 +132,21 @@ export function ThankYouLetterModal({ donorName, amount, date, phone, email, onC
     setBusy('whatsapp');
     try {
       const dataUrl = await renderImage();
-
-      let p = (phoneInput || '').replace(/\D/g, '');
-      if (p && p.startsWith('0')) p = '972' + p.substring(1);
-
-      if (p) {
-        // יש מספר טלפון של התורם — מורידים את התמונה לצירוף ידני, ופותחים
-        // קישור ישיר לצ'אט הוואטסאפ של אותו מספר בדיוק (לא חלונית שיתוף
-        // כללית), כדי שהשליחה תהיה מקושרת ישירות לתורם.
-        const link = document.createElement('a');
-        link.download = `מכתב-תודה-${donorName}.png`;
-        link.href = dataUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setDownloaded(true);
-
-        window.open(`https://wa.me/${p}?text=${encodeURIComponent(bodyText)}`, '_blank');
-        return;
-      }
-
-      // אין מספר טלפון בכלל — אין למי לקשר ישירות, אז נשתמש ב-Web Share
-      // (אם נתמך) כדי לפחות לאפשר בחירת איש קשר/אפליקציה עם התמונה מצורפת.
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], `todah-${donorName}.png`, { type: 'image/png' });
+
+      // נסה Web Share API עם קובץ — פותח גיליון שיתוף נייטיב של הטלפון עם
+      // התמונה כבר מצורפת. המשתמש בוחר WhatsApp ואיש הקשר בתוך WhatsApp.
+      // זה עובד על Android Chrome ו-iOS Safari (iOS 15+).
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: 'מכתב תודה', text: bodyText });
         return;
       }
+
+      // fallback: Web Share לא נתמך — מורידים תמונה ופותחים wa.me עם הטקסט.
+      // אם יש מספר טלפון — מקשרים ישירות לאותו צ'אט.
+      let p = (phoneInput || '').replace(/\D/g, '');
+      if (p && p.startsWith('0')) p = '972' + p.substring(1);
 
       const link = document.createElement('a');
       link.download = `מכתב-תודה-${donorName}.png`;
@@ -168,10 +155,19 @@ export function ThankYouLetterModal({ donorName, amount, date, phone, email, onC
       link.click();
       document.body.removeChild(link);
       setDownloaded(true);
-      window.open(`https://wa.me/?text=${encodeURIComponent(bodyText)}`, '_blank');
-    } catch (e) {
-      console.error(e);
-      alert('שגיאה בשיתוף');
+
+      window.open(
+        p
+          ? `https://wa.me/${p}?text=${encodeURIComponent(bodyText)}`
+          : `https://wa.me/?text=${encodeURIComponent(bodyText)}`,
+        '_blank'
+      );
+    } catch (e: any) {
+      // המשתמש ביטל את חלונית השיתוף — לא שגיאה אמיתית
+      if (e?.name !== 'AbortError') {
+        console.error(e);
+        alert('שגיאה בשיתוף');
+      }
     } finally {
       setBusy(null);
     }
