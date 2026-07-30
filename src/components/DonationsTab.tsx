@@ -1,16 +1,21 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { RefreshCw, Search, HandCoins, AlertTriangle, ChevronDown, X } from 'lucide-react';
+import { RefreshCw, Search, HandCoins, AlertTriangle, ChevronDown, X, Mail, MessageSquare, Pencil, Check, User } from 'lucide-react';
 import { getHkStatus, sortHkList, countHkByStatus, HK_STATUS_LABEL, HK_STATUS_COLOR, HkStatus } from '../lib/standingOrders';
 import { parseDdMmYyyy } from '../lib/dateUtils';
 import { ProfileModal } from './ProfileModal';
+import { ThankYouLetterModal } from './ThankYouLetterModal';
 
 type MainTab = 'donations' | 'hk' | 'errors';
 
 export function DonationsTab() {
-  const { donations, hk, failures, settings, refresh } = useAppStore();
+  const { donations, hk, failures, settings, refresh, crm } = useAppStore();
   const [mainTab, setMainTab] = useState<MainTab>('donations');
   const [selectedDonor, setSelectedDonor] = useState<string | null>(null);
+  const [selectedDonation, setSelectedDonation] = useState<any | null>(null);
+  const [showThankYou, setShowThankYou] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFields, setEditFields] = useState<Record<string, any>>({});
 
   // ── תרומות ──────────────────────────────────────────────────────────────
   const [search, setSearch] = useState('');
@@ -187,7 +192,7 @@ export function DonationsTab() {
                 {pagedDonations.length === 0 ? (
                   <div className="text-center py-8 text-gray-400 text-sm">לא נמצאו תרומות התואמות לסינון</div>
                 ) : pagedDonations.map((d: any, i: number) => (
-                  <div key={i} onClick={() => setSelectedDonor(d.name)} className="px-4 py-2.5 hover:bg-[#FAF6EE] transition-colors cursor-pointer md:grid md:grid-cols-[1fr_6rem_6rem_9rem_1fr] md:items-center">
+                  <div key={i} onClick={() => { setSelectedDonation(d); setIsEditing(false); }} className="px-4 py-2.5 hover:bg-[#FAF6EE] transition-colors cursor-pointer md:grid md:grid-cols-[1fr_6rem_6rem_9rem_1fr] md:items-center">
                     <div className="flex justify-between items-center md:contents">
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm">💰</span>
@@ -303,6 +308,140 @@ export function DonationsTab() {
       </div>
 
       {selectedDonor && <ProfileModal name={selectedDonor} onClose={() => setSelectedDonor(null)} />}
+
+      {/* Donation Detail Modal */}
+      {selectedDonation && !showThankYou && (
+        <div className="fixed inset-0 z-[55] flex flex-col justify-end" dir="rtl">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSelectedDonation(null)} />
+          <div className="relative bg-white rounded-t-2xl max-h-[88vh] overflow-y-auto shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#EDE6D6] sticky top-0 bg-white z-10">
+              <h2 className="font-['Frank_Ruhl_Libre'] font-bold text-[#0D1B2A] text-lg">פרטי תרומה</h2>
+              <button onClick={() => setSelectedDonation(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500">
+                <X size={16} />
+              </button>
+            </div>
+
+            {!isEditing ? (
+              <div className="p-4 space-y-3">
+                {/* Donor name + profile link */}
+                <div className="flex items-center justify-between bg-[#FAF6EE] rounded-xl p-3.5">
+                  <div>
+                    <div className="text-[10px] text-gray-400 uppercase font-bold mb-0.5">תורם</div>
+                    <div className="text-lg font-['Frank_Ruhl_Libre'] font-bold text-[#0D1B2A]">{selectedDonation.name || '—'}</div>
+                  </div>
+                  <button
+                    onClick={() => { setSelectedDonor(selectedDonation.name); setSelectedDonation(null); }}
+                    className="flex items-center gap-1.5 text-xs text-[#9B7A2F] font-bold border border-[#C9A84C] rounded-lg px-2.5 py-1.5 bg-white"
+                  >
+                    <User size={12} /> פרופיל
+                  </button>
+                </div>
+
+                {/* Amount + Date */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
+                    <div className="text-[10px] text-gray-400 uppercase font-bold mb-1">סכום</div>
+                    <div className="font-['Frank_Ruhl_Libre'] font-bold text-2xl text-[#9B7A2F]">
+                      ₪{(selectedDonation.amount || 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
+                    <div className="text-[10px] text-gray-400 uppercase font-bold mb-1">תאריך</div>
+                    <div className="font-bold text-[#0D1B2A] text-sm">{selectedDonation.date || '—'}</div>
+                  </div>
+                </div>
+
+                {selectedDonation.method && (
+                  <div className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
+                    <div className="text-[10px] text-gray-400 uppercase font-bold mb-1">אפיק גבייה</div>
+                    <div className="text-sm text-[#0D1B2A]">{selectedDonation.method}</div>
+                  </div>
+                )}
+
+                {selectedDonation.purpose && (
+                  <div className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
+                    <div className="text-[10px] text-gray-400 uppercase font-bold mb-1">ייעוד</div>
+                    <div className="text-sm text-[#0D1B2A]">{selectedDonation.purpose}</div>
+                  </div>
+                )}
+
+                {selectedDonation.notes && (
+                  <div className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
+                    <div className="text-[10px] text-gray-400 uppercase font-bold mb-1">הערות</div>
+                    <div className="text-sm text-[#0D1B2A] whitespace-pre-wrap">{selectedDonation.notes}</div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-1 pb-2">
+                  <button
+                    onClick={() => setShowThankYou(true)}
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#0D1B2A] text-[#C9A84C] font-bold py-3 rounded-xl text-sm"
+                  >
+                    <Mail size={16} /> מכתב תודה
+                  </button>
+                  <button
+                    onClick={() => { setIsEditing(true); setEditFields({ ...selectedDonation }); }}
+                    className="flex items-center justify-center gap-2 bg-gray-100 text-gray-600 font-bold py-3 px-4 rounded-xl"
+                    title="עריכה"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Edit mode */
+              <div className="p-4 space-y-3">
+                <div className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  תרומות מגוגל שיטס לא ניתנות לשינוי מכאן — ניתן לעדכן הערות בלבד
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-gray-500 uppercase font-bold mb-1.5">הערות</label>
+                  <textarea
+                    value={editFields.notes || ''}
+                    onChange={e => setEditFields((f: any) => ({ ...f, notes: e.target.value }))}
+                    rows={4}
+                    className="w-full bg-gray-50 border border-[#EDE6D6] rounded-xl p-3 text-sm outline-none focus:border-[#C9A84C] resize-none"
+                    placeholder="הוסף הערה..."
+                  />
+                </div>
+
+                <div className="flex gap-2 pb-2">
+                  <button
+                    onClick={() => {
+                      setSelectedDonation((prev: any) => ({ ...prev, notes: editFields.notes }));
+                      setIsEditing(false);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#0D1B2A] text-[#C9A84C] font-bold py-3 rounded-xl text-sm"
+                  >
+                    <Check size={16} /> שמור
+                  </button>
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="flex items-center justify-center gap-2 bg-gray-100 text-gray-600 font-bold py-3 px-4 rounded-xl"
+                  >
+                    ביטול
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Thank You Letter — shown on top of donation detail */}
+      {showThankYou && selectedDonation && (
+        <ThankYouLetterModal
+          donorName={selectedDonation.name}
+          amount={selectedDonation.amount}
+          date={selectedDonation.date}
+          phone={crm[selectedDonation.name]?.phone}
+          email={crm[selectedDonation.name]?.email}
+          onClose={() => setShowThankYou(false)}
+        />
+      )}
     </div>
   );
 }
