@@ -18,6 +18,8 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
   const [attEventId, setAttEventId] = useState<string | null>(null);
   const [tasksEventId, setTasksEventId] = useState<string | null>(null);
   const [taskText, setTaskText] = useState('');
+  const [taskDate, setTaskDate] = useState('');
+  const [taskTime, setTaskTime] = useState('');
 
   const [evName, setEvName] = useState('');
   const [evType, setEvType] = useState('shabbat');
@@ -187,10 +189,15 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
 
   const addEventTask = () => {
     if (!taskText.trim() || !currentTasksEvent) return;
-    const nextTasks = [...(currentTasksEvent.tasks || []), stampCreated({ text: taskText.trim(), done: false })];
+    const newTask: any = stampCreated({ text: taskText.trim(), done: false });
+    if (taskDate) newTask.dueDate = taskDate;
+    if (taskTime) newTask.time = taskTime;
+    const nextTasks = [...(currentTasksEvent.tasks || []), newTask];
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
     logAction('task_create');
     setTaskText('');
+    setTaskDate('');
+    setTaskTime('');
   };
 
   const deleteEventTask = (idx: number) => {
@@ -570,9 +577,13 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                ))}
              </div>
 
-             <div className="flex gap-2">
+             <div className="flex gap-2 mb-2">
                <input value={taskText} onChange={e => setTaskText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addEventTask()} type="text" className="flex-1 bg-white border border-[#EDE6D6] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A84C]" placeholder="משימה חדשה..." />
                <button onClick={addEventTask} className="bg-[#0D1B2A] rounded-xl px-4 text-[#E8C97A] font-bold shadow-sm shrink-0">הוסף</button>
+             </div>
+             <div className="flex gap-2">
+               <input value={taskDate} onChange={e => setTaskDate(e.target.value)} type="date" className="flex-1 bg-white border border-[#EDE6D6] rounded-xl px-3 py-2 text-xs outline-none focus:border-[#C9A84C]" title="תאריך (לא חובה)" />
+               <input value={taskTime} onChange={e => setTaskTime(e.target.value)} type="time" className="flex-1 bg-white border border-[#EDE6D6] rounded-xl px-3 py-2 text-xs outline-none focus:border-[#C9A84C]" title="שעה (לא חובה)" />
              </div>
 
              {!hasMediaTasks(currentTasksEvent) && (

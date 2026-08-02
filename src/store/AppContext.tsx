@@ -61,6 +61,7 @@ interface AppState {
   updateHomeVisitEntry: (roundId: string, name: string, patch: Partial<HomeVisitEntry>) => void;
   reorderHomeVisitEntries: (roundId: string, from: number, to: number) => void;
   archiveHomeVisitRound: (roundId: string) => void;
+  deleteHomeVisitRound: (roundId: string) => void;
   removeHomeVisitEntry: (roundId: string, name: string) => void;
   addHomeVisitEntries: (roundId: string, entries: HomeVisitEntry[]) => void;
   updateHomeVisitRoundMeta: (roundId: string, patch: Partial<HomeVisitRound>) => void;
@@ -531,6 +532,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // מוחק מערך שלם (בלתי הפיך) — גם מנקה כל משימת "ביקור בית" פתוחה ששייכת אליו.
+  const deleteHomeVisitRound = (roundId: string) => {
+    setHomeVisits(prev => {
+      const next = { rounds: prev.rounds.filter(r => r.id !== roundId) };
+      saveHomeVisitsDataCloud(next);
+      return next;
+    });
+    setHolidayExtras(prev => {
+      const cur = prev[STANDALONE_TASKS_ID] || {};
+      const tasks = (cur.tasks || []).filter((t: any) => !(t.kind === 'homeVisit' && t.roundId === roundId));
+      const next = { ...prev, [STANDALONE_TASKS_ID]: { ...cur, tasks } };
+      saveHolidayExtrasCloud(next);
+      return next;
+    });
+  };
+
   // מסיר איש קשר מהמערך (למשל הוסף בטעות), וגם מוחק את משימת "ביקור בית" הפתוחה
   // התואמת לו (אם קיימת) מכרטיסיית "משימות".
   const removeHomeVisitEntry = (roundId: string, name: string) => {
@@ -617,7 +634,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       mergeContacts, unmergeContact, settings, updateSettings,
       archiveOccurrence, importTasksFromHistory, updateHistoryEntry,
       homeVisits, startHomeVisitRound, markHomeVisitDone, createHomeVisitTaskForEntry,
-      updateHomeVisitEntry, reorderHomeVisitEntries, archiveHomeVisitRound,
+      updateHomeVisitEntry, reorderHomeVisitEntries, archiveHomeVisitRound, deleteHomeVisitRound,
       removeHomeVisitEntry, addHomeVisitEntries, updateHomeVisitRoundMeta,
     }}>
       {children}

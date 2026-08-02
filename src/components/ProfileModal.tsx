@@ -17,6 +17,9 @@ import {
 import { toCanonicalHebrewString, parseCanonicalHebrewString, hebrewToGregorianCompanion, gregorianToHebrewCompanion } from '../lib/hebrewDates';
 import { computeLastContactByName, computeLastContactDetailsByName, formatLastContact } from '../lib/contactFocus';
 import { computeDonorTotalSince, filterDonationsSince } from '../lib/donationFilter';
+import { STANDALONE_TASKS_ID, createMeetingTask } from '../lib/tasks';
+import { logAction } from '../lib/score';
+import { CalendarPlus } from 'lucide-react';
 
 interface FamilyMember {
   id: string;
@@ -27,7 +30,7 @@ interface FamilyMember {
 }
 
 export function ProfileModal({ name, onClose }: { name: string, onClose: () => void }) {
-  const { donors, crm, donations, updateCrm, refresh, settings } = useAppStore();
+  const { donors, crm, donations, updateCrm, refresh, settings, holidayExtras, updateHolidayExtras } = useAppStore();
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
   const [isEditingFields, setIsEditingFields] = useState(false);
@@ -36,6 +39,9 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
   const [isSaving, setIsSaving] = useState(false);
   const [isDonationOpen, setIsDonationOpen] = useState(false);
   const [isMeetingOpen, setIsMeetingOpen] = useState(false);
+  const [isMeetingTaskOpen, setIsMeetingTaskOpen] = useState(false);
+  const [meetingTaskDate, setMeetingTaskDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [meetingTaskTime, setMeetingTaskTime] = useState('');
   const [isDateConverterOpen, setIsDateConverterOpen] = useState(false);
   const [isMergeOpen, setIsMergeOpen] = useState(false);
   const [thankYouInfo, setThankYouInfo] = useState<{amount: number} | null>(null);
@@ -65,6 +71,17 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
     : [];
 
   // מוסיף בן משפחה — או מקושר לאיש קשר אמיתי (קיים ברשימת אנשי הקשר), או רק שם חופשי בלי כרטיס
+  // יוצר משימת "פגישה עם X" עתידית (חד-פעמית, מופיעה בכרטיסיית "משימות") —
+  // בשונה מכפתור "מפגש" (MeetingModal) שמתעד מפגש שכבר קרה.
+  const addMeetingTask = () => {
+    const task = createMeetingTask(name, meetingTaskDate || undefined, meetingTaskTime || undefined);
+    const tasks = [...(holidayExtras[STANDALONE_TASKS_ID]?.tasks || []), task];
+    updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
+    logAction('task_create');
+    setIsMeetingTaskOpen(false);
+    setMeetingTaskTime('');
+  };
+
   const addFamilyMember = () => {
     const relation = familyRelation.trim();
     const nameVal = familyNameInput.trim();
@@ -584,6 +601,30 @@ export function ProfileModal({ name, onClose }: { name: string, onClose: () => v
                 <Navigation size={18} />
                 {address ? `נווט לכתובת: ${address}` : 'חיפוש כתובת במפה'}
               </a>
+              <button
+                onClick={() => setIsMeetingTaskOpen(o => !o)}
+                className="col-span-2 bg-[#FAF6EE] text-[#9B7A2F] border border-[#EDE6D6] rounded-xl p-3 flex items-center justify-center gap-2 font-semibold text-sm"
+              >
+                <CalendarPlus size={18} />
+                קבע משימת פגישה
+              </button>
+              {isMeetingTaskOpen && (
+                <div className="col-span-2 bg-white border border-[#EDE6D6] rounded-xl p-3 flex gap-2">
+                  <input
+                    value={meetingTaskDate}
+                    onChange={e => setMeetingTaskDate(e.target.value)}
+                    type="date"
+                    className="flex-1 bg-[#FAF6EE] border border-[#EDE6D6] rounded-lg px-2 py-2 text-xs outline-none focus:border-[#C9A84C]"
+                  />
+                  <input
+                    value={meetingTaskTime}
+                    onChange={e => setMeetingTaskTime(e.target.value)}
+                    type="time"
+                    className="flex-1 bg-[#FAF6EE] border border-[#EDE6D6] rounded-lg px-2 py-2 text-xs outline-none focus:border-[#C9A84C]"
+                  />
+                  <button onClick={addMeetingTask} className="bg-[#0D1B2A] text-[#E8C97A] rounded-lg px-3 text-xs font-bold shrink-0">הוסף</button>
+                </div>
+              )}
             </div>
           );
         })()}

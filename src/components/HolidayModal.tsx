@@ -21,6 +21,8 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
   const [isEditingLastYear, setIsEditingLastYear] = useState(false);
   const [isAddingReminder, setIsAddingReminder] = useState(false);
   const [addTaskText, setAddTaskText] = useState('');
+  const [addTaskDate, setAddTaskDate] = useState('');
+  const [addTaskTime, setAddTaskTime] = useState('');
   const [isCreatingDoc, setIsCreatingDoc] = useState(false);
   const [docError, setDocError] = useState<string | null>(null);
 
@@ -141,10 +143,15 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
 
   const addTask = () => {
     if (!addTaskText.trim()) return;
-    const nextTasks = [...(extra.tasks || []), stampCreated({ text: addTaskText.trim(), done: false })];
+    const newTask: any = stampCreated({ text: addTaskText.trim(), done: false });
+    if (addTaskDate) newTask.dueDate = addTaskDate;
+    if (addTaskTime) newTask.time = addTaskTime;
+    const nextTasks = [...(extra.tasks || []), newTask];
     updateHolidayExtras(id, { tasks: nextTasks });
     logAction('task_create');
     setAddTaskText('');
+    setAddTaskDate('');
+    setAddTaskTime('');
   };
 
   const deleteTask = (idx: number) => {
@@ -577,9 +584,13 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
               )
             )) : null}
           </div>
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-2 mb-2">
             <input value={addTaskText} onChange={e => setAddTaskText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTask()} type="text" className="flex-1 bg-white border border-[#EDE6D6] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A84C]" placeholder="משימה חדשה..." />
             <button onClick={addTask} className="bg-[#0D1B2A] rounded-xl px-4 text-[#E8C97A] font-bold shadow-sm">הוסף</button>
+          </div>
+          <div className="flex gap-2 mb-3">
+            <input value={addTaskDate} onChange={e => setAddTaskDate(e.target.value)} type="date" className="flex-1 bg-white border border-[#EDE6D6] rounded-xl px-3 py-2 text-xs outline-none focus:border-[#C9A84C]" title="תאריך (לא חובה)" />
+            <input value={addTaskTime} onChange={e => setAddTaskTime(e.target.value)} type="time" className="flex-1 bg-white border border-[#EDE6D6] rounded-xl px-3 py-2 text-xs outline-none focus:border-[#C9A84C]" title="שעה (לא חובה)" />
           </div>
 
           <AIPlanningAssistant

@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { History, Users, Wallet, ChevronDown, Lightbulb } from 'lucide-react';
-import { countAttendance, sumBudget } from '../lib/history';
+import { History, Users, Wallet, ChevronDown, Lightbulb, X, Plus } from 'lucide-react';
+import { countAttendance, sumBudget, HistoryEntry } from '../lib/history';
 
 export function HistoryTab() {
-  const { history, updateHistoryEntry } = useAppStore();
+  const { history, updateHistoryEntry, visibleDonors } = useAppStore();
   const [filter, setFilter] = useState<'all' | 'holiday' | 'event'>('all');
   const [openId, setOpenId] = useState<string | null>(null);
   const [forms, setForms] = useState<Record<string, { good: string; improve: string; plan: string }>>({});
+  const [attNameInput, setAttNameInput] = useState<Record<string, string>>({});
+  const [newAttDate, setNewAttDate] = useState('');
 
   const sorted = useMemo(
     () => [...history].sort((a, b) => new Date(b.archivedAt).getTime() - new Date(a.archivedAt).getTime()),
@@ -21,6 +23,57 @@ export function HistoryTab() {
     const form = forms[id];
     if (!form) return;
     updateHistoryEntry(id, { insights: form });
+  };
+
+  // עריכת תקציב — אותה מבנה נתונים (expenses/income, כל שורה {name,planned,actual}) כמו בכרטיס החג/אירוע החי.
+  const patchBudget = (h: HistoryEntry, budget: { expenses: any[]; income: any[] }) => updateHistoryEntry(h.id, { budget });
+  const addBudgetLine = (h: HistoryEntry, type: 'expenses' | 'income') => {
+    const budget = h.budget || { expenses: [], income: [] };
+    patchBudget(h, { ...budget, [type]: [...(budget[type] || []), { name: '', planned: '', actual: '' }] });
+  };
+  const updateBudgetLine = (h: HistoryEntry, type: 'expenses' | 'income', idx: number, field: string, value: string) => {
+    const budget = h.budget || { expenses: [], income: [] };
+    const arr = [...(budget[type] || [])];
+    arr[idx] = { ...arr[idx], [field]: value };
+    patchBudget(h, { ...budget, [type]: arr });
+  };
+  const removeBudgetLine = (h: HistoryEntry, type: 'expenses' | 'income', idx: number) => {
+    const budget = h.budget || { expenses: [], income: [] };
+    const arr = [...(budget[type] || [])];
+    arr.splice(idx, 1);
+    patchBudget(h, { ...budget, [type]: arr });
+  };
+
+  // עריכת נוכחות — attendance הוא Record<dateKey, Record<personName, boolean>>
+  const patchAttendance = (h: HistoryEntry, attendance: Record<string, Record<string, boolean>>) => updateHistoryEntry(h.id, { attendance });
+  const toggleAttendanceName = (h: HistoryEntry, dateKey: string, personName: string) => {
+    const attendance = { ...(h.attendance || {}) };
+    attendance[dateKey] = { ...(attendance[dateKey] || {}), [personName]: !attendance[dateKey]?.[personName] };
+    patchAttendance(h, attendance);
+  };
+  const removeAttendanceName = (h: HistoryEntry, dateKey: string, personName: string) => {
+    const attendance = { ...(h.attendance || {}) };
+    const byName = { ...(attendance[dateKey] || {}) };
+    delete byName[personName];
+    attendance[dateKey] = byName;
+    patchAttendance(h, attendance);
+  };
+  const removeAttendanceDate = (h: HistoryEntry, dateKey: string) => {
+    const attendance = { ...(h.attendance || {}) };
+    delete attendance[dateKey];
+    patchAttendance(h, attendance);
+  };
+  const addAttendanceName = (h: HistoryEntry, dateKey: string, personName: string) => {
+    if (!personName.trim()) return;
+    const attendance = { ...(h.attendance || {}) };
+    attendance[dateKey] = { ...(attendance[dateKey] || {}), [personName.trim()]: true };
+    patchAttendance(h, attendance);
+  };
+  const addAttendanceDate = (h: HistoryEntry, dateISO: string) => {
+    if (!dateISO) return;
+    const attendance = { ...(h.attendance || {}) };
+    if (!attendance[dateISO]) attendance[dateISO] = {};
+    patchAttendance(h, attendance);
   };
 
   return (
@@ -37,7 +90,7 @@ export function HistoryTab() {
 
       <div className="p-4 md:p-6">
         <div className="bg-white rounded-xl p-3.5 border border-[#EDE6D6] shadow-sm mb-4 text-[11px] text-gray-500 leading-relaxed">
-          כדי להעביר חג או אירוע לכאן, פתחו אותו ולחצו על <b>"סמן כהסתיים והעבר להיסטוריה"</b>. הפעולה שומרת תמונת מצב (נוכחות, תקציב, משימות) ומרוקנת את המשימות של המופע החי כדי שהשנה הבאה תתחיל נקי — אפשר לייבא בחזרה את אותן משימות בלחיצת כפתור.
+          כדי להעביר חג או אירוע לכאן, פתחו אותו ולחצו על <b>"סמן כהסתיים והעבר להיסטוריה"</b>. הפעולה שומרת תמונת מצב (נוכחות, תקציב, משימות) ומרוקנת את המשימות של המופע החי כדי שהשנה הבאה תתחיל נקי — אפשר לייבא בחזרה את אותן משימות בלחיצת כפתור. נוכחות ותקציב ניתנים לעריכה גם כאן, אחרי ההעברה.
         </div>
 
         <div className="flex gap-1.5 mb-4">
@@ -130,8 +183,107 @@ export function HistoryTab() {
                           />
                         </div>
                       </div>
+
+                      {/* תקציב — ניתן לעריכה */}
+                      <div className="mt-4">
+                        <div className="flex items-center gap-1.5 mb-2 text-[#9B7A2F] font-bold text-sm">
+                          <Wallet size={14} /> תקציב (ניתן לעריכה)
+                        </div>
+                        <div className="space-y-1 mb-2">
+                          {(h.budget?.expenses || []).map((exp: any, i: number) => (
+                            <div key={i} className="flex gap-1.5 items-center">
+                              <input value={exp.name} onChange={e => updateBudgetLine(h, 'expenses', i, 'name', e.target.value)} placeholder="שם הוצאה" className="flex-1 bg-white border border-[#EDE6D6] rounded-md px-2 py-1 text-xs outline-none focus:border-[#C9A84C]" />
+                              <input value={exp.planned} onChange={e => updateBudgetLine(h, 'expenses', i, 'planned', e.target.value)} type="number" placeholder="מתוכנן" className="w-16 bg-white border border-[#EDE6D6] rounded-md px-2 py-1 text-xs outline-none focus:border-[#C9A84C]" />
+                              <input value={exp.actual} onChange={e => updateBudgetLine(h, 'expenses', i, 'actual', e.target.value)} type="number" placeholder="בפועל" className="w-16 bg-white border border-[#EDE6D6] rounded-md px-2 py-1 text-xs outline-none focus:border-[#C9A84C]" />
+                              <button onClick={() => removeBudgetLine(h, 'expenses', i)} className="text-red-300 hover:text-red-500 shrink-0"><X size={14} /></button>
+                            </div>
+                          ))}
+                          <button onClick={() => addBudgetLine(h, 'expenses')} className="text-xs text-[#9B7A2F] font-bold">+ הוצאה</button>
+                        </div>
+                        <div className="space-y-1">
+                          {(h.budget?.income || []).map((inc: any, i: number) => (
+                            <div key={i} className="flex gap-1.5 items-center">
+                              <input value={inc.name} onChange={e => updateBudgetLine(h, 'income', i, 'name', e.target.value)} placeholder="שם הכנסה" className="flex-1 bg-white border border-[#EDE6D6] rounded-md px-2 py-1 text-xs outline-none focus:border-[#C9A84C]" />
+                              <input value={inc.planned} onChange={e => updateBudgetLine(h, 'income', i, 'planned', e.target.value)} type="number" placeholder="מתוכנן" className="w-16 bg-white border border-[#EDE6D6] rounded-md px-2 py-1 text-xs outline-none focus:border-[#C9A84C]" />
+                              <input value={inc.actual} onChange={e => updateBudgetLine(h, 'income', i, 'actual', e.target.value)} type="number" placeholder="בפועל" className="w-16 bg-white border border-[#EDE6D6] rounded-md px-2 py-1 text-xs outline-none focus:border-[#C9A84C]" />
+                              <button onClick={() => removeBudgetLine(h, 'income', i)} className="text-red-300 hover:text-red-500 shrink-0"><X size={14} /></button>
+                            </div>
+                          ))}
+                          <button onClick={() => addBudgetLine(h, 'income')} className="text-xs text-[#9B7A2F] font-bold">+ הכנסה</button>
+                        </div>
+                      </div>
+
+                      {/* נוכחות — ניתן לעריכה */}
+                      <div className="mt-4">
+                        <div className="flex items-center gap-1.5 mb-2 text-[#9B7A2F] font-bold text-sm">
+                          <Users size={14} /> נוכחות (ניתן לעריכה)
+                        </div>
+                        {Object.keys(h.attendance || {}).length === 0 && (
+                          <div className="text-xs text-gray-400 mb-2">אין עדיין רישום נוכחות</div>
+                        )}
+                        {Object.entries(h.attendance || {}).map(([dateKey, byName]) => (
+                          <div key={dateKey} className="bg-white rounded-lg p-2 mb-2 border border-[#EDE6D6]">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-xs font-bold text-[#0D1B2A]">{dateKey}</span>
+                              <button onClick={() => removeAttendanceDate(h, dateKey)} className="text-red-300 hover:text-red-500" title="מחק תאריך"><X size={12} /></button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 mb-1.5">
+                              {Object.entries(byName as Record<string, boolean>).map(([pname, present]) => (
+                                <span key={pname} className={`text-[10px] pr-2 pl-1 py-1 rounded-full border flex items-center gap-1 ${present ? 'bg-[#D1FAE5] border-[#10B981] text-[#065F46]' : 'bg-gray-50 border-gray-200 text-gray-400 line-through'}`}>
+                                  <button onClick={() => toggleAttendanceName(h, dateKey, pname)}>{pname}</button>
+                                  <button onClick={() => removeAttendanceName(h, dateKey, pname)} className="hover:text-red-500"><X size={9} /></button>
+                                </span>
+                              ))}
+                            </div>
+                            <div className="flex gap-1.5">
+                              <input
+                                list="history-donor-names"
+                                value={attNameInput[dateKey] || ''}
+                                onChange={e => setAttNameInput(prev => ({ ...prev, [dateKey]: e.target.value }))}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    addAttendanceName(h, dateKey, attNameInput[dateKey] || '');
+                                    setAttNameInput(prev => ({ ...prev, [dateKey]: '' }));
+                                  }
+                                }}
+                                type="text"
+                                placeholder="הוסף שם..."
+                                className="flex-1 bg-[#FAF6EE] border border-[#EDE6D6] rounded-md px-2 py-1 text-xs outline-none focus:border-[#C9A84C]"
+                              />
+                              <button
+                                onClick={() => {
+                                  addAttendanceName(h, dateKey, attNameInput[dateKey] || '');
+                                  setAttNameInput(prev => ({ ...prev, [dateKey]: '' }));
+                                }}
+                                className="bg-[#0D1B2A] text-[#E8C97A] rounded-md px-2 shrink-0"
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        <datalist id="history-donor-names">
+                          {Object.keys(visibleDonors).map(n => <option key={n} value={n} />)}
+                        </datalist>
+                        <div className="flex gap-1.5">
+                          <input
+                            value={newAttDate}
+                            onChange={e => setNewAttDate(e.target.value)}
+                            type="date"
+                            className="flex-1 bg-white border border-[#EDE6D6] rounded-md px-2 py-1.5 text-xs outline-none focus:border-[#C9A84C]"
+                          />
+                          <button
+                            onClick={() => { addAttendanceDate(h, newAttDate); setNewAttDate(''); }}
+                            disabled={!newAttDate}
+                            className="bg-[#0D1B2A] text-[#E8C97A] rounded-md px-3 text-xs font-bold shrink-0 disabled:opacity-40"
+                          >
+                            + הוסף תאריך
+                          </button>
+                        </div>
+                      </div>
+
                       {(h.tasks || []).length > 0 && (
-                        <div className="mt-3">
+                        <div className="mt-4">
                           <div className="text-[10px] font-bold text-gray-500 uppercase mb-1.5">משימות שהיו במופע הזה</div>
                           <div className="space-y-1">
                             {h.tasks.map((t: any, i: number) => (

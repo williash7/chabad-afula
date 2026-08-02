@@ -6,34 +6,48 @@ export interface SubTask {
   done: boolean;
 }
 
-export type TaskPriority = 'urgent' | 'medium' | 'low';
-
 export interface TaskItem {
   text: string;
   done: boolean;
-  kind?: 'invite' | 'holidayReminder' | 'homeVisit' | 'eventReminder';
+  kind?: 'invite' | 'holidayReminder' | 'homeVisit' | 'eventReminder' | 'meeting';
   people?: string[];
   doneNames?: string[];
-  dueDate?: string; // ISO date, רק למשימות חד-פעמיות שאין להן תאריך טבעי (חג/אירוע), וגם מזהה המופע למשימות kind:'eventReminder'
+  dueDate?: string; // ISO date (YYYY-MM-DD) — "מתי". גם מזהה המופע למשימות kind:'eventReminder'
   skipped?: boolean; // true = הושלמה כ"לא עושים כלום" ולא כביצוע בפועל (רק למשימות kind:'holidayReminder')
   roundId?: string; // מזהה מערך ביקורי הבית שהמשימה נוצרה ממנו (רק למשימות kind:'homeVisit')
-  personName?: string; // שם איש הקשר שהמשימה נוגעת אליו (רק למשימות kind:'homeVisit')
+  personName?: string; // שם איש הקשר שהמשימה נוגעת אליו (רק למשימות kind:'homeVisit'/'meeting')
   // פרטים נוספים — רלוונטיים לכל סוגי המשימות (לא רק kind ספציפי)
-  time?: string;       // שעה, HH:MM
+  time?: string;       // שעת התחלה, HH:MM (עם dueDate כתאריך — ביחד הם "מתי בדיוק")
   location?: string;   // מקום
-  startTime?: string;  // תחילת טווח (HH:MM), אם יש משך זמן
-  endTime?: string;    // סוף טווח (HH:MM)
+  endTime?: string;    // שעת סיום (HH:MM) — אופציונלי
   notes?: string;      // פרטים נוספים חופשיים
   subtasks?: SubTask[];
   createdAt?: string;   // ISO — מתויג אוטומטית ביצירה, משמש כברירת מחדל למיון לפי תאריך כשאין dueDate/תאריך הקשר
-  priority?: TaskPriority; // דחיפות ידנית — משמשת למיון "לפי דחיפות"
+  urgent?: boolean;     // ציר "דחוף" של מטריצת אייזנהאואר
+  important?: boolean;  // ציר "חשוב" של מטריצת אייזנהאואר
 }
 
-export const PRIORITY_META: Record<TaskPriority, { label: string; emoji: string; weight: number }> = {
-  urgent: { label: 'דחוף', emoji: '🔴', weight: 0 },
-  medium: { label: 'רגיל', emoji: '🟡', weight: 1 },
-  low:    { label: 'לא דחוף', emoji: '🟢', weight: 2 },
+export type EisenhowerQuadrant = 'do' | 'schedule' | 'delegate' | 'eliminate';
+
+// מטריצת אייזנהאואר: "do" (דחוף+חשוב) מטופל ראשון, "eliminate" (לא דחוף
+// ולא חשוב, כולל משימה שעדיין לא סווגה כלל) נדחק לסוף במיון לפי דחיפות.
+export const EISENHOWER_META: Record<EisenhowerQuadrant, { label: string; emoji: string; weight: number }> = {
+  do:        { label: 'דחוף וחשוב',       emoji: '🔴', weight: 0 },
+  schedule:  { label: 'חשוב, לא דחוף',    emoji: '🟡', weight: 1 },
+  delegate:  { label: 'דחוף, לא חשוב',    emoji: '🟠', weight: 2 },
+  eliminate: { label: 'לא דחוף ולא חשוב', emoji: '🟢', weight: 3 },
 };
+
+export function hasEisenhowerRating(task: { urgent?: boolean; important?: boolean }): boolean {
+  return task.urgent !== undefined || task.important !== undefined;
+}
+
+export function eisenhowerQuadrant(task: { urgent?: boolean; important?: boolean }): EisenhowerQuadrant {
+  if (task.urgent && task.important) return 'do';
+  if (!task.urgent && task.important) return 'schedule';
+  if (task.urgent && !task.important) return 'delegate';
+  return 'eliminate';
+}
 
 // מוסיף createdAt="עכשיו" לכל אובייקט משימה חדש — כדי שלכל משימה יהיה תאריך
 // למיון גם אם לא הוגדר לה dueDate מפורש ואין לה הקשר חג/אירוע (ראה taskSort.ts).
@@ -129,6 +143,11 @@ export function createHomeVisitTask(personName: string, roundId: string): TaskIt
 // וגם להצגת "כמה זמן נותר" (renderTaskItem הקיים כבר יודע להציג dueDate).
 export function createEventReminderTask(eventName: string, occurrenceDateISO: string): TaskItem {
   return stampCreated({ text: `🔔 מחר — ${eventName}`, done: false, kind: 'eventReminder' as const, dueDate: occurrenceDateISO });
+}
+
+// משימת "פגישה עם X" — נוצרת ידנית מכרטיס איש הקשר (ProfileModal).
+export function createMeetingTask(personName: string, dueDate?: string, time?: string): TaskItem {
+  return stampCreated({ text: `🤝 פגישה עם ${personName}`, done: false, kind: 'meeting' as const, personName, dueDate, time });
 }
 
 export function addSubtask(task: TaskItem, text: string): TaskItem {

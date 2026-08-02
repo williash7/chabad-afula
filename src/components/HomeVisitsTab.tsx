@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { DoorOpen, Plus, X, Check, ChevronUp, ChevronDown, CalendarClock, CalendarRange, CheckCircle2, Bell, Search, ClipboardList } from 'lucide-react';
+import { DoorOpen, Plus, X, Check, ChevronUp, ChevronDown, CalendarClock, CalendarRange, CheckCircle2, Bell, Search, ClipboardList, Trash2 } from 'lucide-react';
 import {
   HomeVisitEntry, HomeVisitRound, HOME_VISIT_CATEGORY_TAGS, liveCategoryFor,
   emptyHomeVisitEntry, buildInitialRoundEntries,
@@ -13,7 +13,7 @@ export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; coun
   const {
     homeVisits, visibleDonors, crm, donations, holidays, holidayExtras,
     startHomeVisitRound, markHomeVisitDone, createHomeVisitTaskForEntry,
-    updateHomeVisitEntry, reorderHomeVisitEntries, archiveHomeVisitRound,
+    updateHomeVisitEntry, reorderHomeVisitEntries, archiveHomeVisitRound, deleteHomeVisitRound,
     removeHomeVisitEntry, addHomeVisitEntries, updateHomeVisitRoundMeta,
   } = useAppStore();
 
@@ -162,6 +162,9 @@ export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; coun
             onCreateTask={(name) => createHomeVisitTaskForEntry(round.id, name)}
             onRemove={(name) => removeHomeVisitEntry(round.id, name)}
             onArchive={() => archiveHomeVisitRound(round.id)}
+            onDelete={() => {
+              if (window.confirm('למחוק את המערך הזה לצמיתות? כל האנשים והמשימות שבו יימחקו.')) deleteHomeVisitRound(round.id);
+            }}
             onAddMore={() => openAddToRoundPicker(round.id)}
             onUpdateMeta={(patch) => updateHomeVisitRoundMeta(round.id, patch)}
           />
@@ -175,8 +178,20 @@ export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; coun
                 const visited = r.entries.filter(e => e.visited).length;
                 return (
                   <div key={r.id} className="bg-white rounded-xl p-3 shadow-sm border border-[#EDE6D6] flex items-center justify-between text-sm">
-                    <span className="text-gray-500">{new Date(r.createdAt).toLocaleDateString('he-IL')}</span>
-                    <span className="text-[#0D1B2A] font-bold">{visited}/{r.entries.length} בוקרו</span>
+                    <div className="min-w-0">
+                      <span className="text-gray-500">{new Date(r.createdAt).toLocaleDateString('he-IL')}</span>
+                      {r.purpose && <span className="text-gray-400 text-xs mr-2 truncate">· {r.purpose}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[#0D1B2A] font-bold">{visited}/{r.entries.length} בוקרו</span>
+                      <button
+                        onClick={() => { if (window.confirm('למחוק את המערך הזה לצמיתות?')) deleteHomeVisitRound(r.id); }}
+                        className="text-red-300 hover:text-red-500"
+                        title="מחק מערך"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -258,7 +273,7 @@ export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; coun
 
 function RoundCard({
   round, crm, holidayNames, hasOpenTask,
-  onUpdateEntry, onReorder, onMarkDone, onCreateTask, onRemove, onArchive, onAddMore, onUpdateMeta,
+  onUpdateEntry, onReorder, onMarkDone, onCreateTask, onRemove, onArchive, onDelete, onAddMore, onUpdateMeta,
 }: {
   round: HomeVisitRound;
   crm: Record<string, any>;
@@ -270,6 +285,7 @@ function RoundCard({
   onCreateTask: (name: string) => void;
   onRemove: (name: string) => void;
   onArchive: () => void;
+  onDelete: () => void;
   onAddMore: () => void;
   onUpdateMeta: (patch: Partial<HomeVisitRound>) => void;
 } & { key?: any }) {
@@ -310,6 +326,9 @@ function RoundCard({
             title="סיים את המערך"
           >
             <CheckCircle2 size={12} /> סיים מערך
+          </button>
+          <button onClick={onDelete} className="text-red-300 hover:text-red-500 p-1.5" title="מחק מערך">
+            <Trash2 size={14} />
           </button>
         </div>
       </div>

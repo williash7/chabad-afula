@@ -4,10 +4,11 @@ import { Check, ClipboardList, Calendar, CalendarCheck, Cake, X, ChevronLeft, Pl
 import { ProfileModal } from './ProfileModal';
 import { HolidayModal } from './HolidayModal';
 import { TaskDetailsPanel } from './TaskDetailsPanel';
+import { TaskCalendarView } from './TaskCalendarView';
 import { QuickLogButtons } from './QuickLogButtons';
 import { computePersonalDateEvents } from '../lib/personalDates';
 import { inviteRemainingMinutes, toggleInvitePerson, STANDALONE_TASKS_ID, PERSONAL_DATE_EXTRAS_ID, nextEventOccurrence, formatRemaining, stampCreated } from '../lib/tasks';
-import { effectiveDate, compareTasks, priorityWeight, TaskSortKey } from '../lib/taskSort';
+import { effectiveDate, compareTasks, priorityWeight, applyTaskTime, TaskSortKey } from '../lib/taskSort';
 import { getCustomHols } from '../lib/api';
 import { logAction } from '../lib/score';
 
@@ -18,10 +19,14 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addTarget, setAddTarget] = useState<{ kind: 'holiday' | 'event'; id: string } | null>(null);
   const [addText, setAddText] = useState('');
+  const [addDate, setAddDate] = useState('');
+  const [addTime, setAddTime] = useState('');
   const [standaloneText, setStandaloneText] = useState('');
   const [standaloneDue, setStandaloneDue] = useState('');
+  const [standaloneTime, setStandaloneTime] = useState('');
   const [sortKey, setSortKey] = useState<TaskSortKey>('date');
-  const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
+  const [viewMode, setViewMode] = useState<'grouped' | 'flat' | 'calendar'>('grouped');
+  const [calendarSelectedKey, setCalendarSelectedKey] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (addTrigger?.tab === 'tasks' && addTrigger.count) setIsAddOpen(true);
@@ -147,10 +152,12 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     if (!standaloneText.trim()) return;
     const newTask: any = stampCreated({ text: standaloneText.trim(), done: false });
     if (standaloneDue) newTask.dueDate = standaloneDue;
+    if (standaloneTime) newTask.time = standaloneTime;
     updateHolidayExtras(STANDALONE_TASKS_ID, { tasks: [...allStandaloneTasks, newTask] });
     logAction('task_create');
     setStandaloneText('');
     setStandaloneDue('');
+    setStandaloneTime('');
   };
 
   const openHolidayFull = (holidayId: string) => {
@@ -239,14 +246,19 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
 
   const submitAddTask = () => {
     if (!addTarget || !addText.trim()) return;
+    const newTask: any = stampCreated({ text: addText.trim(), done: false });
+    if (addDate) newTask.dueDate = addDate;
+    if (addTime) newTask.time = addTime;
     if (addTarget.kind === 'holiday') {
-      const tasks = [...(holidayExtras[addTarget.id]?.tasks || []), stampCreated({ text: addText.trim(), done: false })];
+      const tasks = [...(holidayExtras[addTarget.id]?.tasks || []), newTask];
       updateHolidayExtras(addTarget.id, { tasks });
     } else {
-      updateEventsData((eventsData as any[]).map((e: any) => e.id === addTarget.id ? { ...e, tasks: [...(e.tasks || []), stampCreated({ text: addText.trim(), done: false })] } : e));
+      updateEventsData((eventsData as any[]).map((e: any) => e.id === addTarget.id ? { ...e, tasks: [...(e.tasks || []), newTask] } : e));
     }
     logAction('task_create');
     setAddText('');
+    setAddDate('');
+    setAddTime('');
     setAddTarget(null);
     setIsAddOpen(false);
   };
@@ -407,6 +419,71 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
 
   flatRows.sort((a, b) => compareTasks(a.priorityObj, b.priorityObj, sortKey, a.date, b.date));
 
+  // תצוגת לוח שנה — כמו flatRows, אבל התאריך כאן הוא תאריך "אמיתי" בלבד
+  // (dueDate מפורש, או תאריך ההקשר של חג/אירוע) בלי נפילה חזרה ל-createdAt,
+  // כדי שמשימות בלי תאריך אמיתי יופיעו במגירת "ללא תאריך" ולא "יתפסו" תא אקראי.
+  interface CalItem {
+    key: string; date: Date | null; label: string; done: boolean; t: any;
+    onToggle: () => void; onDelete: () => void; onTogglePerson: (p: string) => void; onPatch: (patch: any) => void; extra?: React.ReactNode;
+    customCard?: React.ReactNode;
+  }
+  const calendarItems: CalItem[] = [];
+
+  sortedPersonalDates.forEach(c => {
+    const extra = personalDateExtras[c.key] || {};
+    const syntheticTask: any = { text: c.msg, done: false, ...extra };
+    const date = new Date(today.getTime() + c.dist * 86400000);
+    calendarItems.push({
+      key: `pd-${c.key}`, date, label: `${c.icon} ${c.name}`, done: false, t: syntheticTask,
+      onToggle: () => {}, onDelete: () => {}, onTogglePerson: () => {}, onPatch: patch => patchPersonalDate(c.key, patch),
+      customCard: (
+        <div className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
+          <div className="text-[10px] text-[#9B7A2F] font-bold mb-1.5">{c.icon} תאריך אישי</div>
+          <div className="flex items-center gap-3 mb-2.5 cursor-pointer" onClick={() => { setSelectedDonor(c.name); setCalendarSelectedKey(null); }}>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-[#0D1B2A] truncate">{c.name}</div>
+              <div className="text-xs text-gray-600 mt-0.5">{c.msg}</div>
+            </div>
+          </div>
+          <QuickLogButtons donorName={c.name} compact />
+          <TaskDetailsPanel task={syntheticTask} onPatch={patch => patchPersonalDate(c.key, patch)} />
+        </div>
+      ),
+    });
+  });
+
+  holidayGroups.forEach(g => {
+    g.tasks.forEach(({ t, idx }: any) => {
+      calendarItems.push({
+        key: `h-${g.id}-${idx}`, date: g.contextDate ? applyTaskTime(g.contextDate, t) : null, label: `🗓️ ${t.text}`, done: !!t.done, t,
+        onToggle: () => toggleHolidayTask(g.id, idx), onDelete: () => deleteHolidayTask(g.id, idx),
+        onTogglePerson: p => toggleHolidayInvitePerson(g.id, idx, p), onPatch: patch => patchHolidayTask(g.id, idx, patch),
+        extra: holidayExtraFor(g.id, idx, t),
+      });
+    });
+  });
+
+  eventGroups.forEach(g => {
+    g.tasks.forEach(({ t, idx }: any) => {
+      calendarItems.push({
+        key: `e-${g.id}-${idx}`, date: g.contextDate ? applyTaskTime(g.contextDate, t) : null, label: `📅 ${t.text}`, done: !!t.done, t,
+        onToggle: () => toggleEventTask(g.id, idx), onDelete: () => deleteEventTask(g.id, idx),
+        onTogglePerson: p => toggleEventInvitePerson(g.id, idx, p), onPatch: patch => patchEventTask(g.id, idx, patch),
+      });
+    });
+  });
+
+  standaloneTasks.forEach(({ t, idx }: any) => {
+    calendarItems.push({
+      key: `s-${idx}`, date: t.dueDate ? applyTaskTime(new Date(t.dueDate), t) : null, label: `📌 ${t.text}`, done: !!t.done, t,
+      onToggle: t.kind === 'homeVisit' ? () => markHomeVisitDone(t.roundId, t.personName) : () => toggleStandaloneTask(idx),
+      onDelete: () => deleteStandaloneTask(idx), onTogglePerson: p => toggleStandaloneInvitePerson(idx, p),
+      onPatch: patch => patchStandaloneTask(idx, patch), extra: standaloneExtraFor(t),
+    });
+  });
+
+  const calendarSelected = calendarItems.find(i => i.key === calendarSelectedKey) || null;
+
   const addTargetOptions = [
     ...holidayGroups.map(g => ({ kind: 'holiday' as const, id: g.id, label: g.id })),
     ...Object.keys(holidayLookup).filter(id => !holidayGroups.some(g => g.id === id)).map(id => ({ kind: 'holiday' as const, id, label: id })),
@@ -461,6 +538,12 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
         >
           📋 רשימה אחת
         </button>
+        <button
+          onClick={() => setViewMode('calendar')}
+          className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${viewMode === 'calendar' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
+        >
+          📆 לוח שנה
+        </button>
       </div>
 
       {viewMode === 'flat' ? (
@@ -470,6 +553,13 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
           ) : (
             <div className="space-y-3">{flatRows.map(r => r.node)}</div>
           )}
+        </div>
+      ) : viewMode === 'calendar' ? (
+        <div className="p-4 md:p-6 max-w-3xl">
+          <TaskCalendarView
+            items={calendarItems.map(i => ({ key: i.key, date: i.date, label: i.label, done: i.done }))}
+            onSelect={setCalendarSelectedKey}
+          />
         </div>
       ) : (
       <div className="p-4 md:p-6 max-w-2xl space-y-6">
@@ -618,7 +708,14 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
                 onChange={e => setStandaloneDue(e.target.value)}
                 type="date"
                 className="flex-1 bg-[#FAF6EE] border border-[#EDE6D6] rounded-xl px-3 py-2 text-xs outline-none focus:border-[#C9A84C]"
-                title="דדליין (לא חובה)"
+                title="תאריך (לא חובה)"
+              />
+              <input
+                value={standaloneTime}
+                onChange={e => setStandaloneTime(e.target.value)}
+                type="time"
+                className="flex-1 bg-[#FAF6EE] border border-[#EDE6D6] rounded-xl px-3 py-2 text-xs outline-none focus:border-[#C9A84C]"
+                title="שעה (לא חובה)"
               />
               <button onClick={addStandaloneTask} disabled={!standaloneText.trim()} className="bg-[#0D1B2A] rounded-xl px-4 text-[#E8C97A] font-bold text-sm shadow-sm disabled:opacity-40 shrink-0">
                 הוסף
@@ -663,6 +760,21 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
               className="w-full border-2 border-[#EDE6D6] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A84C] mb-4"
               placeholder="למשל: להזמין דוברת, לקנות פרחים..."
             />
+            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">תאריך ושעה (לא חובה)</label>
+            <div className="flex gap-2 mb-4">
+              <input
+                value={addDate}
+                onChange={e => setAddDate(e.target.value)}
+                type="date"
+                className="flex-1 border-2 border-[#EDE6D6] rounded-xl px-3 py-2 text-sm outline-none focus:border-[#C9A84C]"
+              />
+              <input
+                value={addTime}
+                onChange={e => setAddTime(e.target.value)}
+                type="time"
+                className="flex-1 border-2 border-[#EDE6D6] rounded-xl px-3 py-2 text-sm outline-none focus:border-[#C9A84C]"
+              />
+            </div>
             <button
               onClick={submitAddTask}
               disabled={!addTarget || !addText.trim()}
@@ -676,6 +788,23 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
 
       {selectedDonor && <ProfileModal name={selectedDonor} onClose={() => setSelectedDonor(null)} />}
       {selectedHoliday && <HolidayModal holiday={selectedHoliday} onClose={() => setSelectedHoliday(null)} />}
+
+      {/* פרטי משימה מלוח השנה */}
+      {calendarSelected && (
+        <div className="fixed inset-0 bg-black/60 z-[220] flex items-center justify-center p-4 backdrop-blur-sm" onClick={e => e.target === e.currentTarget && setCalendarSelectedKey(null)}>
+          <div className="bg-transparent w-full max-w-sm animate-in fade-in zoom-in duration-200 relative">
+            <button onClick={() => setCalendarSelectedKey(null)} className="absolute -top-9 left-0 text-white/70 hover:text-white"><X size={20} /></button>
+            {calendarSelected.customCard || renderTaskItem(
+              calendarSelected.t,
+              calendarSelected.onToggle,
+              () => { calendarSelected.onDelete(); setCalendarSelectedKey(null); },
+              calendarSelected.onTogglePerson,
+              calendarSelected.onPatch,
+              calendarSelected.extra
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
