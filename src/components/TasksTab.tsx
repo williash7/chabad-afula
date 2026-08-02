@@ -21,6 +21,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const [standaloneText, setStandaloneText] = useState('');
   const [standaloneDue, setStandaloneDue] = useState('');
   const [sortKey, setSortKey] = useState<TaskSortKey>('date');
+  const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
 
   React.useEffect(() => {
     if (addTrigger?.tab === 'tasks' && addTrigger.count) setIsAddOpen(true);
@@ -296,6 +297,116 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     )
   );
 
+  // כפתורים ייחודיים לפי kind — מוצאים לכפתור משותף כדי לשמש גם בתצוגה
+  // המקובצת וגם בתצוגה השטוחה (viewMode==='flat') בלי לשכפל JSX.
+  const holidayExtraFor = (holidayId: string, idx: number, t: any) => t.kind === 'holidayReminder' ? (
+    <button
+      onClick={() => skipHolidayTask(holidayId, idx)}
+      className={`text-[10px] px-2 py-1 rounded-full border shrink-0 whitespace-nowrap ${t.skipped ? 'bg-[#FEF3C7] border-[#F59E0B] text-[#92400E]' : 'bg-[#FAF6EE] border-[#EDE6D6] text-gray-500'}`}
+      title={t.skipped ? 'בטל דילוג' : 'לדלג הפעם — לא צריך לעדכן'}
+    >
+      {t.skipped ? '↩️ בוטל' : '⏭️ לדלג'}
+    </button>
+  ) : undefined;
+
+  const standaloneExtraFor = (t: any) => t.kind === 'homeVisit' ? (
+    <button
+      onClick={() => setTab('homevisits')}
+      className="text-[10px] px-2 py-1 rounded-full border border-[#EDE6D6] bg-[#FAF6EE] text-[#9B7A2F] shrink-0 whitespace-nowrap"
+      title="פתח את מערך הביקורים"
+    >
+      🏠 מערך
+    </button>
+  ) : undefined;
+
+  // תצוגה שטוחה — כל המשימות (כולל תאריכים אישיים) יחד, ממוינות רק לפי
+  // sortKey, בלי חלוקה לקטגוריות (חג/אירוע/חד-פעמי). כל שורה שומרת "פירור לחם"
+  // קטן שמזכיר מאיפה היא הגיעה, כדי לא לאבד לגמרי את ההקשר.
+  const flatRows: { key: string; date: Date | null; priorityObj: any; node: React.ReactNode }[] = [];
+
+  sortedPersonalDates.forEach(c => {
+    const extra = personalDateExtras[c.key] || {};
+    const syntheticTask: any = { text: c.msg, done: false, ...extra };
+    const date = new Date(today.getTime() + c.dist * 86400000);
+    flatRows.push({
+      key: `pd-${c.key}`,
+      date,
+      priorityObj: extra,
+      node: (
+        <div key={`pd-${c.key}`} className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
+          <div className="text-[10px] text-[#9B7A2F] font-bold mb-1.5">{c.icon} תאריך אישי</div>
+          <div className="flex items-center gap-3 mb-2.5 cursor-pointer" onClick={() => setSelectedDonor(c.name)}>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-[#0D1B2A] truncate">{c.name}</div>
+              <div className="text-xs text-gray-600 mt-0.5">{c.msg}</div>
+            </div>
+          </div>
+          <QuickLogButtons donorName={c.name} compact />
+          <TaskDetailsPanel task={syntheticTask} onPatch={patch => patchPersonalDate(c.key, patch)} />
+        </div>
+      ),
+    });
+  });
+
+  holidayGroups.forEach(g => {
+    g.tasks.forEach(({ t, idx, date }: any) => {
+      flatRows.push({
+        key: `h-${g.id}-${idx}`,
+        date,
+        priorityObj: t,
+        node: (
+          <div key={`h-${g.id}-${idx}`}>
+            <button onClick={() => openHolidayFull(g.id)} className="text-[10px] text-[#9B7A2F] font-bold mb-1 hover:underline flex items-center gap-1">
+              🗓️ {g.id} <ChevronLeft size={10} />
+            </button>
+            {renderTaskItem(t, () => toggleHolidayTask(g.id, idx), () => deleteHolidayTask(g.id, idx), p => toggleHolidayInvitePerson(g.id, idx, p), patch => patchHolidayTask(g.id, idx, patch), holidayExtraFor(g.id, idx, t))}
+          </div>
+        ),
+      });
+    });
+  });
+
+  eventGroups.forEach(g => {
+    g.tasks.forEach(({ t, idx, date }: any) => {
+      flatRows.push({
+        key: `e-${g.id}-${idx}`,
+        date,
+        priorityObj: t,
+        node: (
+          <div key={`e-${g.id}-${idx}`}>
+            <button onClick={() => setTab('events')} className="text-[10px] text-[#9B7A2F] font-bold mb-1 hover:underline flex items-center gap-1">
+              📅 {g.name} <ChevronLeft size={10} />
+            </button>
+            {renderTaskItem(t, () => toggleEventTask(g.id, idx), () => deleteEventTask(g.id, idx), p => toggleEventInvitePerson(g.id, idx, p), patch => patchEventTask(g.id, idx, patch))}
+          </div>
+        ),
+      });
+    });
+  });
+
+  standaloneTasks.forEach(({ t, idx, date }: any) => {
+    flatRows.push({
+      key: `s-${idx}`,
+      date,
+      priorityObj: t,
+      node: (
+        <div key={`s-${idx}`}>
+          <div className="text-[10px] text-[#9B7A2F] font-bold mb-1">📌 חד-פעמית</div>
+          {renderTaskItem(
+            t,
+            t.kind === 'homeVisit' ? () => markHomeVisitDone(t.roundId, t.personName) : () => toggleStandaloneTask(idx),
+            () => deleteStandaloneTask(idx),
+            p => toggleStandaloneInvitePerson(idx, p),
+            patch => patchStandaloneTask(idx, patch),
+            standaloneExtraFor(t)
+          )}
+        </div>
+      ),
+    });
+  });
+
+  flatRows.sort((a, b) => compareTasks(a.priorityObj, b.priorityObj, sortKey, a.date, b.date));
+
   const addTargetOptions = [
     ...holidayGroups.map(g => ({ kind: 'holiday' as const, id: g.id, label: g.id })),
     ...Object.keys(holidayLookup).filter(id => !holidayGroups.some(g => g.id === id)).map(id => ({ kind: 'holiday' as const, id, label: id })),
@@ -335,6 +446,32 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
         </button>
       </div>
 
+      {/* תצוגה */}
+      <div className="px-4 md:px-6 pt-2 flex items-center gap-2">
+        <span className="text-[11px] text-gray-400">תצוגה:</span>
+        <button
+          onClick={() => setViewMode('grouped')}
+          className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${viewMode === 'grouped' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
+        >
+          📁 לפי קטגוריה
+        </button>
+        <button
+          onClick={() => setViewMode('flat')}
+          className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${viewMode === 'flat' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
+        >
+          📋 רשימה אחת
+        </button>
+      </div>
+
+      {viewMode === 'flat' ? (
+        <div className="p-4 md:p-6 max-w-2xl">
+          {flatRows.length === 0 ? (
+            <div className="bg-white rounded-xl p-4 text-center text-gray-500 shadow-sm text-sm border border-[#EDE6D6]">אין משימות פתוחות</div>
+          ) : (
+            <div className="space-y-3">{flatRows.map(r => r.node)}</div>
+          )}
+        </div>
+      ) : (
       <div className="p-4 md:p-6 max-w-2xl space-y-6">
         {/* תאריכים אישיים */}
         <div>
@@ -395,15 +532,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
                             () => deleteHolidayTask(g.id, idx),
                             p => toggleHolidayInvitePerson(g.id, idx, p),
                             patch => patchHolidayTask(g.id, idx, patch),
-                            t.kind === 'holidayReminder' ? (
-                              <button
-                                onClick={() => skipHolidayTask(g.id, idx)}
-                                className={`text-[10px] px-2 py-1 rounded-full border shrink-0 whitespace-nowrap ${t.skipped ? 'bg-[#FEF3C7] border-[#F59E0B] text-[#92400E]' : 'bg-[#FAF6EE] border-[#EDE6D6] text-gray-500'}`}
-                                title={t.skipped ? 'בטל דילוג' : 'לדלג הפעם — לא צריך לעדכן'}
-                              >
-                                {t.skipped ? '↩️ בוטל' : '⏭️ לדלג'}
-                              </button>
-                            ) : undefined
+                            holidayExtraFor(g.id, idx, t)
                           )}
                         </div>
                       ))}
@@ -468,15 +597,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
                     () => deleteStandaloneTask(idx),
                     p => toggleStandaloneInvitePerson(idx, p),
                     patch => patchStandaloneTask(idx, patch),
-                    t.kind === 'homeVisit' ? (
-                      <button
-                        onClick={() => setTab('homevisits')}
-                        className="text-[10px] px-2 py-1 rounded-full border border-[#EDE6D6] bg-[#FAF6EE] text-[#9B7A2F] shrink-0 whitespace-nowrap"
-                        title="פתח את מערך הביקורים"
-                      >
-                        🏠 מערך
-                      </button>
-                    ) : undefined
+                    standaloneExtraFor(t)
                   )}
                 </div>
               ))}
@@ -506,6 +627,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
           </div>
         </div>
       </div>
+      )}
 
       {/* הוספת משימה */}
       {isAddOpen && (

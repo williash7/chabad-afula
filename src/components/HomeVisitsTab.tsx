@@ -67,19 +67,43 @@ export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; coun
     if (addTrigger?.tab === 'homevisits' && addTrigger.count) openNewRoundPicker();
   }, [addTrigger]);
 
-  const candidateList = React.useMemo(
-    () => buildInitialRoundEntries(visibleDonors, crm, donations, today, 300).filter(e => !allActiveNames.has(e.name)),
-    [visibleDonors, crm, donations, allActiveNames]
+  // כל אנשי הקשר הזמינים לבחירה (לא רק "באיחור ליצירת קשר") — כדי שבחירת
+  // קטגוריה שלמה תכלול באמת את כולם, לא רק את מי שכבר הוצע כמועמד.
+  const allCandidates = React.useMemo(
+    () => Object.keys(visibleDonors)
+      .filter(name => !allActiveNames.has(name))
+      .map(name => ({ name, category: liveCategoryFor(name, crm) }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'he')),
+    [visibleDonors, crm, allActiveNames]
   );
 
   const filteredCandidates = pickerSearch
-    ? candidateList.filter(e => e.name.includes(pickerSearch))
-    : candidateList;
+    ? allCandidates.filter(e => e.name.includes(pickerSearch))
+    : allCandidates;
+
+  // קיבוץ המועמדים (המסוננים) לפי קטגוריה — לבחירה מהירה של קטגוריה שלמה (אחת או יותר)
+  const categoryGroups = React.useMemo(() => {
+    const map = new Map<string, string[]>();
+    filteredCandidates.forEach(e => {
+      if (!map.has(e.category)) map.set(e.category, []);
+      map.get(e.category)!.push(e.name);
+    });
+    return Array.from(map.entries());
+  }, [filteredCandidates]);
 
   const togglePicked = (name: string) => {
     setPickerSelected(prev => {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  };
+
+  const toggleCategoryPicked = (names: string[]) => {
+    const allSelected = names.every(n => pickerSelected.has(n));
+    setPickerSelected(prev => {
+      const next = new Set(prev);
+      names.forEach(n => allSelected ? next.delete(n) : next.add(n));
       return next;
     });
   };
@@ -179,6 +203,22 @@ export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; coun
                 placeholder="חיפוש איש קשר..."
               />
             </div>
+            {categoryGroups.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-3 shrink-0">
+                {categoryGroups.map(([category, names]) => {
+                  const allSelected = names.every(n => pickerSelected.has(n));
+                  return (
+                    <button
+                      key={category}
+                      onClick={() => toggleCategoryPicked(names)}
+                      className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${allSelected ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-[#FAF6EE] text-[#9B7A2F] border-[#EDE6D6]'}`}
+                    >
+                      {allSelected ? '✓ ' : ''}{category} ({names.length})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="overflow-y-auto flex-1 -mx-1 px-1 space-y-1.5 mb-3">
               {filteredCandidates.length === 0 && (
                 <div className="text-center text-sm text-gray-400 py-6">אין מועמדים תואמים</div>
