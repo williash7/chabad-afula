@@ -3,6 +3,8 @@
 // החיות כדי שהמופע הבא (השנה הבאה) יתחיל נקי. אפשר לייבא בחזרה משימות
 // מהמופע הקודם בלחיצת כפתור — הן נוספות כמשימות חדשות (done:false).
 
+import { stampCreated } from './tasks';
+
 export interface HistoryEntry {
   id: string;
   type: 'holiday' | 'event';
@@ -66,9 +68,9 @@ export function findLatestHistoryFor(history: HistoryEntry[], type: 'holiday' | 
   return matches.reduce((latest, cur) => (new Date(cur.archivedAt) > new Date(latest.archivedAt) ? cur : latest));
 }
 
-// משכפל את המשימות מרשומת היסטוריה כמשימות חדשות ("איפוס" מצב done)
+// משכפל את המשימות מרשומת היסטוריה כמשימות חדשות ("איפוס" מצב done, ותאריך יצירה חדש)
 export function tasksFromHistory(entry: HistoryEntry): any[] {
-  return (entry.tasks || []).map(t => ({
+  return (entry.tasks || []).map(t => stampCreated({
     ...t,
     done: false,
     ...(t.kind === 'invite' ? { doneNames: [] } : {}),

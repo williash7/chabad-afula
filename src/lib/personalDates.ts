@@ -9,6 +9,7 @@ export interface PersonalDateEvent {
   msg: string;
   icon: string;
   dist: number;
+  key: string; // יציב (לא תלוי במספר הימים שנותרו) — לשמירת "פרטים נוספים" (שעה/הערות/תתי-משימות) לאורך זמן
 }
 
 function nextGregorianRecurrenceDays(gStr: string, today: Date): number | null {
@@ -44,7 +45,7 @@ export function computePersonalDateEvents(
     if (hBday) {
       const dist = nextOccurrenceDays(hBday, 'birthday', today, fallbackTable);
       if (dist !== null) {
-        events.push({ name, msg: 'יום הולדת עברי ' + (dist === 0 ? 'היום' : `בעוד ${dist} ימים`), icon: '🎂', dist });
+        events.push({ name, msg: 'יום הולדת עברי ' + (dist === 0 ? 'היום' : `בעוד ${dist} ימים`), icon: '🎂', dist, key: `${name}::hbday` });
         hasBirthday = true;
       }
     }
@@ -52,15 +53,15 @@ export function computePersonalDateEvents(
       const gBday = findGregorianBirthday(combined);
       if (gBday) {
         const dist = nextGregorianRecurrenceDays(gBday, today);
-        if (dist !== null) events.push({ name, msg: 'יום הולדת ' + (dist === 0 ? 'היום' : `בעוד ${dist} ימים`), icon: '🎈', dist });
+        if (dist !== null) events.push({ name, msg: 'יום הולדת ' + (dist === 0 ? 'היום' : `בעוד ${dist} ימים`), icon: '🎈', dist, key: `${name}::gbday` });
       }
     }
 
-    findHebrewYahrzeitEntries(combined).forEach(({ key, value }) => {
+    findHebrewYahrzeitEntries(combined).forEach(({ key: yKey, value }) => {
       const dist = nextOccurrenceDays(value, 'yahrzeit', today, fallbackTable);
       if (dist !== null) {
-        const label = /^(יארצייט|יורצייט|יום השנה)$/.test(key) ? 'יארצייט' : key;
-        events.push({ name, msg: label + ' ' + (dist === 0 ? 'היום' : `בעוד ${dist} ימים`), icon: '🕯️', dist });
+        const label = /^(יארצייט|יורצייט|יום השנה)$/.test(yKey) ? 'יארצייט' : yKey;
+        events.push({ name, msg: label + ' ' + (dist === 0 ? 'היום' : `בעוד ${dist} ימים`), icon: '🕯️', dist, key: `${name}::yahrzeit::${yKey}` });
       }
     });
 
@@ -72,7 +73,7 @@ export function computePersonalDateEvents(
         const dist = nextGregorianRecurrenceDays(f.birthday, today);
         if (dist !== null) {
           const label = `יום הולדת ${f.freeName}${f.relation ? ` (${f.relation})` : ''}`;
-          events.push({ name, msg: label + ' ' + (dist === 0 ? 'היום' : `בעוד ${dist} ימים`), icon: '🎂', dist });
+          events.push({ name, msg: label + ' ' + (dist === 0 ? 'היום' : `בעוד ${dist} ימים`), icon: '🎂', dist, key: `${name}::family::${f.freeName}` });
         }
       }
     });

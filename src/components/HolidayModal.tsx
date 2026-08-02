@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { createHolidayDoc } from '../lib/api';
 import { X, Check, MessageSquare, FileText, ExternalLink, Loader2, Download, ClipboardList } from 'lucide-react';
-import { createInviteTask, inviteRemainingMinutes, toggleInvitePerson, MINUTES_PER_CALL } from '../lib/tasks';
+import { createInviteTask, inviteRemainingMinutes, toggleInvitePerson, MINUTES_PER_CALL, stampCreated } from '../lib/tasks';
 import { logAction } from '../lib/score';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
 import { TaskDetailsPanel } from './TaskDetailsPanel';
@@ -141,7 +141,7 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
 
   const addTask = () => {
     if (!addTaskText.trim()) return;
-    const nextTasks = [...(extra.tasks || []), { text: addTaskText.trim(), done: false }];
+    const nextTasks = [...(extra.tasks || []), stampCreated({ text: addTaskText.trim(), done: false })];
     updateHolidayExtras(id, { tasks: nextTasks });
     logAction('task_create');
     setAddTaskText('');
@@ -593,7 +593,7 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
             ]}
             onApply={(result) => {
               let nextTasks = extra.tasks || [];
-              if (result.tasks?.length) nextTasks = [...nextTasks, ...result.tasks.map(text => ({ text, done: false }))];
+              if (result.tasks?.length) nextTasks = [...nextTasks, ...result.tasks.map(text => stampCreated({ text, done: false }))];
               let nextBudget = extra.budget || { expenses: [], income: [] };
               if (result.budget?.length) {
                 const newExpenses = result.budget.filter(b => b.type === 'expense').map(b => ({ name: b.name, planned: b.amount, actual: '' }));

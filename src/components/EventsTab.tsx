@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { Plus, Check, X, ClipboardList, Trash2, Pencil, Clock, Archive } from 'lucide-react';
 import { format } from 'date-fns';
-import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL, nextEventOccurrence, formatRemaining, createEventMediaTasks } from '../lib/tasks';
+import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL, nextEventOccurrence, formatRemaining, createEventMediaTasks, stampCreated } from '../lib/tasks';
 import { logAction } from '../lib/score';
 import { slashDateToDotDate } from '../lib/dateUtils';
 import { findLatestHistoryFor } from '../lib/history';
@@ -187,7 +187,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
 
   const addEventTask = () => {
     if (!taskText.trim() || !currentTasksEvent) return;
-    const nextTasks = [...(currentTasksEvent.tasks || []), { text: taskText.trim(), done: false }];
+    const nextTasks = [...(currentTasksEvent.tasks || []), stampCreated({ text: taskText.trim(), done: false })];
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
     logAction('task_create');
     setTaskText('');
@@ -593,7 +593,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                  ]}
                  onApply={(result) => {
                    if (!result.tasks?.length) return;
-                   const nextTasks = [...(currentTasksEvent.tasks || []), ...result.tasks.map(text => ({ text, done: false }))];
+                   const nextTasks = [...(currentTasksEvent.tasks || []), ...result.tasks.map(text => stampCreated({ text, done: false }))];
                    updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
                    logAction('task_create', result.tasks.length);
                  }}

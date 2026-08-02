@@ -6,7 +6,8 @@ import { HolidayModal } from './HolidayModal';
 import { TaskDetailsPanel } from './TaskDetailsPanel';
 import { QuickLogButtons } from './QuickLogButtons';
 import { computePersonalDateEvents } from '../lib/personalDates';
-import { inviteRemainingMinutes, toggleInvitePerson, STANDALONE_TASKS_ID, nextEventOccurrence, formatRemaining } from '../lib/tasks';
+import { inviteRemainingMinutes, toggleInvitePerson, STANDALONE_TASKS_ID, PERSONAL_DATE_EXTRAS_ID, nextEventOccurrence, formatRemaining, stampCreated } from '../lib/tasks';
+import { effectiveDate, compareTasks, priorityWeight, TaskSortKey } from '../lib/taskSort';
 import { getCustomHols } from '../lib/api';
 import { logAction } from '../lib/score';
 
@@ -19,6 +20,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const [addText, setAddText] = useState('');
   const [standaloneText, setStandaloneText] = useState('');
   const [standaloneDue, setStandaloneDue] = useState('');
+  const [sortKey, setSortKey] = useState<TaskSortKey>('date');
 
   React.useEffect(() => {
     if (addTrigger?.tab === 'tasks' && addTrigger.count) setIsAddOpen(true);
@@ -31,6 +33,17 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     () => computePersonalDateEvents(visibleDonors, crm, today).filter(e => e.dist <= 30),
     [visibleDonors, crm]
   );
+
+  // פרטים נוספים (שעה/מקום/הערות/תתי-משימות/דחיפות) לתזכורות תאריכים אישיים —
+  // keyed לפי PersonalDateEvent.key היציב, נשמר באותה טכניקת piggyback כמו
+  // STANDALONE_TASKS_ID.
+  const personalDateExtras: Record<string, any> = holidayExtras[PERSONAL_DATE_EXTRAS_ID] || {};
+  const patchPersonalDate = (key: string, patch: Partial<any>) => {
+    updateHolidayExtras(PERSONAL_DATE_EXTRAS_ID, { [key]: { ...(personalDateExtras[key] || {}), ...patch } });
+  };
+  const sortedPersonalDates = sortKey === 'priority'
+    ? [...personalDates].sort((a, b) => priorityWeight(personalDateExtras[a.key] || {}) - priorityWeight(personalDateExtras[b.key] || {}))
+    : personalDates;
 
   // מיפוי שם-חג → פרטי התאריך שלו (מה-API ומחגים מותאמים), כדי שאפשר יהיה
   // לפתוח את כרטיס החג המלא (HolidayModal) בלחיצה — אותה בנייה כמו בדשבורד.
@@ -54,31 +67,48 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   // מציגים רק משימות פתוחות (לא בוצעו) — משימה שסומנה כבוצעה נעלמת מהמסך.
   // שומרים את האינדקס המקורי במערך (idx) לכל משימה, כדי שהכפתורים (סימון/מחיקה)
   // עדיין יפנו לפריט הנכון במערך המקורי גם אחרי הסינון.
-  const holidayGroups = Object.keys(holidayExtras)
-    .filter(id => id !== STANDALONE_TASKS_ID)
-    .map(id => {
-      const allTasks = holidayExtras[id]?.tasks || [];
-      const tasks = allTasks
-        .map((t: any, idx: number) => ({ t, idx }))
-        .filter((x: any) => !x.t.done);
-      return { id, tasks };
-    })
-    .filter(g => g.tasks.length > 0);
+  // מיון קבוצות (חג/אירוע) לפי התאריך שלהן (הקרוב קודם), ומיון המשימות בתוך כל
+  // קבוצה לפי sortKey — 'date' (התאריך האפקטיבי) או 'priority' (רמת דחיפות).
+  const sortByContextDate = <T extends { contextDate: Date | null }>(groups: T[]) =>
+    [...groups].sort((a, b) => {
+      if (a.contextDate && b.contextDate) return a.contextDate.getTime() - b.contextDate.getTime();
+      if (a.contextDate) return -1;
+      if (b.contextDate) return 1;
+      return 0;
+    });
 
-  const eventGroups = (eventsData as any[])
-    .map(e => {
+  const holidayGroups = sortByContextDate(
+    Object.keys(holidayExtras)
+      .filter(id => id !== STANDALONE_TASKS_ID && id !== PERSONAL_DATE_EXTRAS_ID)
+      .map(id => {
+        const info = holidayLookup[id];
+        const contextDate = info?.dateStr ? new Date(info.dateStr) : null;
+        const allTasks = holidayExtras[id]?.tasks || [];
+        const tasks = allTasks
+          .map((t: any, idx: number) => ({ t, idx, date: effectiveDate(t, contextDate) }))
+          .filter((x: any) => !x.t.done)
+          .sort((a: any, b: any) => compareTasks(a.t, b.t, sortKey, a.date, b.date));
+        return { id, tasks, contextDate };
+      })
+  ).filter(g => g.tasks.length > 0);
+
+  const eventGroups = sortByContextDate(
+    (eventsData as any[]).map(e => {
+      const contextDate = nextEventOccurrence(e, new Date());
       const allTasks = e.tasks || [];
       const tasks = allTasks
-        .map((t: any, idx: number) => ({ t, idx }))
-        .filter((x: any) => !x.t.done);
-      return { id: e.id, name: e.name, tasks };
+        .map((t: any, idx: number) => ({ t, idx, date: effectiveDate(t, contextDate) }))
+        .filter((x: any) => !x.t.done)
+        .sort((a: any, b: any) => compareTasks(a.t, b.t, sortKey, a.date, b.date));
+      return { id: e.id, name: e.name, tasks, contextDate };
     })
-    .filter(g => g.tasks.length > 0);
+  ).filter(g => g.tasks.length > 0);
 
   const allStandaloneTasks: any[] = holidayExtras[STANDALONE_TASKS_ID]?.tasks || [];
   const standaloneTasks = allStandaloneTasks
-    .map((t: any, idx: number) => ({ t, idx }))
-    .filter((x: any) => !x.t.done);
+    .map((t: any, idx: number) => ({ t, idx, date: effectiveDate(t, null) }))
+    .filter((x: any) => !x.t.done)
+    .sort((a, b) => compareTasks(a.t, b.t, sortKey, a.date, b.date));
 
   const openHolidayCount = holidayGroups.reduce((s, g) => s + g.tasks.length, 0);
   const openEventCount = eventGroups.reduce((s, g) => s + g.tasks.length, 0);
@@ -114,7 +144,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
 
   const addStandaloneTask = () => {
     if (!standaloneText.trim()) return;
-    const newTask: any = { text: standaloneText.trim(), done: false };
+    const newTask: any = stampCreated({ text: standaloneText.trim(), done: false });
     if (standaloneDue) newTask.dueDate = standaloneDue;
     updateHolidayExtras(STANDALONE_TASKS_ID, { tasks: [...allStandaloneTasks, newTask] });
     logAction('task_create');
@@ -209,10 +239,10 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const submitAddTask = () => {
     if (!addTarget || !addText.trim()) return;
     if (addTarget.kind === 'holiday') {
-      const tasks = [...(holidayExtras[addTarget.id]?.tasks || []), { text: addText.trim(), done: false }];
+      const tasks = [...(holidayExtras[addTarget.id]?.tasks || []), stampCreated({ text: addText.trim(), done: false })];
       updateHolidayExtras(addTarget.id, { tasks });
     } else {
-      updateEventsData((eventsData as any[]).map((e: any) => e.id === addTarget.id ? { ...e, tasks: [...(e.tasks || []), { text: addText.trim(), done: false }] } : e));
+      updateEventsData((eventsData as any[]).map((e: any) => e.id === addTarget.id ? { ...e, tasks: [...(e.tasks || []), stampCreated({ text: addText.trim(), done: false })] } : e));
     }
     logAction('task_create');
     setAddText('');
@@ -288,6 +318,23 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
         </button>
       </div>
 
+      {/* מיון */}
+      <div className="px-4 md:px-6 pt-3 flex items-center gap-2">
+        <span className="text-[11px] text-gray-400">מיין לפי:</span>
+        <button
+          onClick={() => setSortKey('date')}
+          className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${sortKey === 'date' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
+        >
+          📅 תאריך / זמן שנותר
+        </button>
+        <button
+          onClick={() => setSortKey('priority')}
+          className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${sortKey === 'priority' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
+        >
+          🔥 דחיפות
+        </button>
+      </div>
+
       <div className="p-4 md:p-6 max-w-2xl space-y-6">
         {/* תאריכים אישיים */}
         <div>
@@ -298,18 +345,23 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
             <div className="bg-white rounded-xl p-4 text-center text-gray-500 shadow-sm text-sm border border-[#EDE6D6]">אין ימי הולדת או יארצייט ב-30 הימים הקרובים</div>
           ) : (
             <div className="space-y-2">
-              {personalDates.map((c, i) => (
-                <div key={i} className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
-                  <div className="flex items-center gap-3 mb-2.5 cursor-pointer" onClick={() => setSelectedDonor(c.name)}>
-                    <span className="text-xl shrink-0">{c.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-[#0D1B2A] truncate">{c.name}</div>
-                      <div className="text-xs text-gray-600 mt-0.5">{c.msg}</div>
+              {sortedPersonalDates.map(c => {
+                const extra = personalDateExtras[c.key] || {};
+                const syntheticTask: any = { text: c.msg, done: false, ...extra };
+                return (
+                  <div key={c.key} className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
+                    <div className="flex items-center gap-3 mb-2.5 cursor-pointer" onClick={() => setSelectedDonor(c.name)}>
+                      <span className="text-xl shrink-0">{c.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-[#0D1B2A] truncate">{c.name}</div>
+                        <div className="text-xs text-gray-600 mt-0.5">{c.msg}</div>
+                      </div>
                     </div>
+                    <QuickLogButtons donorName={c.name} compact />
+                    <TaskDetailsPanel task={syntheticTask} onPatch={patch => patchPersonalDate(c.key, patch)} />
                   </div>
-                  <QuickLogButtons donorName={c.name} compact />
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -326,15 +378,13 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
           ) : (
             <div className="space-y-4">
               {holidayGroups.map(g => {
-                const info = holidayLookup[g.id];
-                const target = info?.dateStr ? new Date(info.dateStr) : null;
                 return (
                   <div key={g.id}>
                     <button onClick={() => openHolidayFull(g.id)} className="flex items-center gap-1 text-xs font-bold text-[#9B7A2F] mb-1 hover:underline">
                       {g.id} <ChevronLeft size={12} />
                     </button>
-                    {target && (
-                      <div className="text-[10px] text-gray-400 flex items-center gap-1 mb-2"><Clock size={10} /> {formatRemaining(target, new Date())}</div>
+                    {g.contextDate && (
+                      <div className="text-[10px] text-gray-400 flex items-center gap-1 mb-2"><Clock size={10} /> {formatRemaining(g.contextDate, new Date())}</div>
                     )}
                     <div className="space-y-2">
                       {g.tasks.map(({ t, idx }: any) => (
@@ -377,15 +427,13 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
           ) : (
             <div className="space-y-4">
               {eventGroups.map(g => {
-                const ev = (eventsData as any[]).find((e: any) => e.id === g.id);
-                const nextOcc = ev ? nextEventOccurrence(ev, new Date()) : null;
                 return (
                   <div key={g.id}>
                     <button onClick={() => setTab('events')} className="flex items-center gap-1 text-xs font-bold text-[#9B7A2F] mb-1 hover:underline">
                       {g.name} <ChevronLeft size={12} />
                     </button>
-                    {nextOcc && (
-                      <div className="text-[10px] text-gray-400 flex items-center gap-1 mb-2"><Clock size={10} /> {formatRemaining(nextOcc, new Date())} עד המפגש הבא</div>
+                    {g.contextDate && (
+                      <div className="text-[10px] text-gray-400 flex items-center gap-1 mb-2"><Clock size={10} /> {formatRemaining(g.contextDate, new Date())} עד המפגש הבא</div>
                     )}
                     <div className="space-y-2">
                       {g.tasks.map(({ t, idx }: any) => (

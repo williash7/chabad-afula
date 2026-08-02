@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, X, Plus, Check, MapPin, Clock } from 'lucide-react';
-import { TaskItem, addSubtask, toggleSubtask, removeSubtask } from '../lib/tasks';
+import { TaskItem, TaskPriority, PRIORITY_META, addSubtask, toggleSubtask, removeSubtask } from '../lib/tasks';
+
+const PRIORITY_KEYS: TaskPriority[] = ['urgent', 'medium', 'low'];
 
 // פאנל פרטים נוסף — משותף לכל סוגי המשימות (חג/אירוע/חד-פעמית/ביקור בית וכו').
 // מנהל את מצב הפתיחה/סגירה שלו בעצמו, כך שכל קריאה ל-<TaskDetailsPanel> היא
@@ -9,7 +11,7 @@ export function TaskDetailsPanel({ task, onPatch }: { task: TaskItem; onPatch: (
   const [expanded, setExpanded] = useState(false);
   const [subtaskText, setSubtaskText] = useState('');
 
-  const hasDetails = !!(task.time || task.location || task.startTime || task.endTime || task.notes || task.subtasks?.length);
+  const hasDetails = !!(task.time || task.location || task.startTime || task.endTime || task.notes || task.subtasks?.length || task.priority);
 
   return (
     <div className="mt-1.5">
@@ -18,11 +20,29 @@ export function TaskDetailsPanel({ task, onPatch }: { task: TaskItem; onPatch: (
         className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-[#9B7A2F]"
       >
         {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-        פרטים נוספים{hasDetails && !expanded ? ' •' : ''}
+        פרטים נוספים
+        {task.priority && !expanded && <span>{PRIORITY_META[task.priority].emoji}</span>}
+        {hasDetails && !expanded && !task.priority ? ' •' : ''}
       </button>
 
       {expanded && (
         <div className="mt-2 bg-[#FAF6EE] border border-[#EDE6D6] rounded-lg p-2.5 space-y-2">
+          <div className="flex gap-1.5">
+            {PRIORITY_KEYS.map(p => (
+              <button
+                key={p}
+                onClick={() => onPatch({ priority: task.priority === p ? undefined : p })}
+                className={`flex-1 text-[11px] py-1 rounded-md border font-medium transition-colors ${
+                  task.priority === p
+                    ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]'
+                    : 'bg-white text-gray-500 border-[#EDE6D6]'
+                }`}
+              >
+                {PRIORITY_META[p].emoji} {PRIORITY_META[p].label}
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <label className="text-[10px] text-gray-500 flex flex-col gap-1">
               <span className="flex items-center gap-1"><Clock size={10} /> שעה</span>

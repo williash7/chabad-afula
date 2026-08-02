@@ -6,6 +6,8 @@ export interface SubTask {
   done: boolean;
 }
 
+export type TaskPriority = 'urgent' | 'medium' | 'low';
+
 export interface TaskItem {
   text: string;
   done: boolean;
@@ -23,6 +25,20 @@ export interface TaskItem {
   endTime?: string;    // סוף טווח (HH:MM)
   notes?: string;      // פרטים נוספים חופשיים
   subtasks?: SubTask[];
+  createdAt?: string;   // ISO — מתויג אוטומטית ביצירה, משמש כברירת מחדל למיון לפי תאריך כשאין dueDate/תאריך הקשר
+  priority?: TaskPriority; // דחיפות ידנית — משמשת למיון "לפי דחיפות"
+}
+
+export const PRIORITY_META: Record<TaskPriority, { label: string; emoji: string; weight: number }> = {
+  urgent: { label: 'דחוף', emoji: '🔴', weight: 0 },
+  medium: { label: 'רגיל', emoji: '🟡', weight: 1 },
+  low:    { label: 'לא דחוף', emoji: '🟢', weight: 2 },
+};
+
+// מוסיף createdAt="עכשיו" לכל אובייקט משימה חדש — כדי שלכל משימה יהיה תאריך
+// למיון גם אם לא הוגדר לה dueDate מפורש ואין לה הקשר חג/אירוע (ראה taskSort.ts).
+export function stampCreated<T extends object>(task: T): T & { createdAt: string } {
+  return { ...task, createdAt: new Date().toISOString() };
 }
 
 export const MINUTES_PER_CALL = 3;
@@ -30,6 +46,10 @@ export const MINUTES_PER_CALL = 3;
 // מזהה שמור בתוך holidayExtras עבור משימות חד-פעמיות שלא שייכות לחג/אירוע ספציפי
 // (אותה טכניקת "piggyback" על אחסון קיים ומסונכרן לענן, כמו __nameMerges__)
 export const STANDALONE_TASKS_ID = '__standalone__';
+
+// מזהה שמור בתוך holidayExtras לפרטים נוספים (שעה/מקום/הערות/תתי-משימות/דחיפות)
+// של תזכורות תאריכים אישיים (יום הולדת/יארצייט) — keyed לפי PersonalDateEvent.key.
+export const PERSONAL_DATE_EXTRAS_ID = '__personalDates__';
 
 // מחשב את המופע הקרוב הבא של אירוע חוזר (עבור "כמה זמן נותר" למשימות אירוע)
 export function nextEventOccurrence(ev: { date?: string; freq?: string; time?: string }, from: Date): Date | null {
@@ -63,20 +83,20 @@ export function formatRemaining(target: Date, now: Date): string {
 // מעשה), ופרסום סיכום אחרי — צילום ופרסום הן שתי משימות נפרדות, לא אחת משולבת.
 export function createEventMediaTasks(): TaskItem[] {
   return [
-    { text: '📢 פרסום קידום לפני האירוע (סטטוס + פייסבוק)', done: false },
-    { text: '📷 צילום בזמן האירוע', done: false },
-    { text: '📸 פרסום סיכום אחרי האירוע (סטטוס + פייסבוק)', done: false },
+    stampCreated({ text: '📢 פרסום קידום לפני האירוע (סטטוס + פייסבוק)', done: false }),
+    stampCreated({ text: '📷 צילום בזמן האירוע', done: false }),
+    stampCreated({ text: '📸 פרסום סיכום אחרי האירוע (סטטוס + פייסבוק)', done: false }),
   ];
 }
 
 export function createInviteTask(label: string, people: string[]): TaskItem {
-  return {
+  return stampCreated({
     text: `📞 הזמנת ${label} — ${people.length} אנשים`,
     done: people.length === 0,
     kind: 'invite',
     people,
     doneNames: [],
-  };
+  });
 }
 
 export function inviteRemainingMinutes(task: TaskItem): number {
@@ -96,19 +116,19 @@ export function toggleInvitePerson(task: TaskItem, personName: string): TaskItem
 
 // משימת "לעדכן את החג X" — נוצרת אוטומטית 30 יום לפני חג (ראה holidayAutoTasks.ts).
 export function createHolidayReminderTask(holidayName: string): TaskItem {
-  return { text: `🗓️ לעדכן את החג — ${holidayName}`, done: false, kind: 'holidayReminder' };
+  return stampCreated({ text: `🗓️ לעדכן את החג — ${holidayName}`, done: false, kind: 'holidayReminder' as const });
 }
 
 // משימת "ביקור בית: X" — נוצרת אוטומטית ל-5 האנשים הראשונים כשמתחילים מערך ביקורים חדש.
 export function createHomeVisitTask(personName: string, roundId: string): TaskItem {
-  return { text: `🏠 ביקור בית — ${personName}`, done: false, kind: 'homeVisit', roundId, personName };
+  return stampCreated({ text: `🏠 ביקור בית — ${personName}`, done: false, kind: 'homeVisit' as const, roundId, personName });
 }
 
 // תזכורת יום לפני מופע של אירוע חוזר (ראה eventAutoTasks.ts) — dueDate הוא תאריך
 // המופע עצמו (YYYY-MM-DD), ומשמש גם כמזהה המופע כדי לא ליצור תזכורת כפולה לו,
 // וגם להצגת "כמה זמן נותר" (renderTaskItem הקיים כבר יודע להציג dueDate).
 export function createEventReminderTask(eventName: string, occurrenceDateISO: string): TaskItem {
-  return { text: `🔔 מחר — ${eventName}`, done: false, kind: 'eventReminder', dueDate: occurrenceDateISO };
+  return stampCreated({ text: `🔔 מחר — ${eventName}`, done: false, kind: 'eventReminder' as const, dueDate: occurrenceDateISO });
 }
 
 export function addSubtask(task: TaskItem, text: string): TaskItem {
