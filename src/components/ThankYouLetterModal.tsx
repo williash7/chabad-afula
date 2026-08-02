@@ -67,10 +67,9 @@ const LETTER_TEXT: Record<Lang, {
 // אוטומטית מהתרומה שממנה נפתח. אפשר לבחור שפת תוכן (עברית/אנגלית/רוסית;
 // ברוסית גם זכר/נקבה), להוריד כתמונה, לשתף בוואטסאפ או לשלוח במייל.
 //
-// וואטסאפ: אם הוזן מספר טלפון, נפתח תמיד קישור ישיר לצ'אט של אותו מספר
-// (wa.me/<טלפון>) עם הטקסט מוכן מראש, ובמקביל התמונה יורדת למכשיר לצירוף
-// ידני (קישורי wa.me לא תומכים בצירוף קובץ). אם לא הוזן טלפון כלל, נעשה
-// שימוש ב-Web Share API (בחירת אפליקציה/איש קשר ידנית) כי אין למי לקשר.
+// וואטסאפ: התמונה תמיד יורדת למכשיר קודם (קישורי wa.me לא תומכים בצירוף
+// קובץ), ואז נפתח קישור wa.me עם הטקסט מוכן מראש — לצ'אט של המספר שהוזן,
+// או לבחירת איש קשר ידנית אם לא הוזן טלפון.
 //
 // לוגו: כדי להציג תמונת לוגו במקום העיגול עם "ח", יש לשמור קובץ תמונה
 // בשם "logo.png" בתיקיית public/ (כלומר בנתיב public/logo.png). האפליקציה
@@ -104,7 +103,6 @@ export function ThankYouLetterModal({ donorName, amount, date, phone, email, onC
     return toPng(letterRef.current, {
       pixelRatio: 2,
       backgroundColor: '#FAF6EE',
-      fontEmbedCSS: '',
       style: { transform: 'none', margin: '0' },
     });
   };
@@ -132,22 +130,11 @@ export function ThankYouLetterModal({ donorName, amount, date, phone, email, onC
     setBusy('whatsapp');
     try {
       const dataUrl = await renderImage();
-      const blob = await (await fetch(dataUrl)).blob();
-      const file = new File([blob], `todah-${donorName}.png`, { type: 'image/png' });
 
-      // נסה Web Share API עם קובץ — פותח גיליון שיתוף נייטיב של הטלפון עם
-      // התמונה כבר מצורפת. המשתמש בוחר WhatsApp ואיש הקשר בתוך WhatsApp.
-      // זה עובד על Android Chrome ו-iOS Safari (iOS 15+).
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'מכתב תודה', text: bodyText });
-        return;
-      }
-
-      // fallback: Web Share לא נתמך — מורידים תמונה ופותחים wa.me עם הטקסט.
-      // אם יש מספר טלפון — מקשרים ישירות לאותו צ'אט.
       let p = (phoneInput || '').replace(/\D/g, '');
       if (p && p.startsWith('0')) p = '972' + p.substring(1);
 
+      // מוריד את התמונה לגלריה — המשתמש יצרף אותה ידנית בוואטסאפ
       const link = document.createElement('a');
       link.download = `מכתב-תודה-${donorName}.png`;
       link.href = dataUrl;
@@ -156,18 +143,16 @@ export function ThankYouLetterModal({ donorName, amount, date, phone, email, onC
       document.body.removeChild(link);
       setDownloaded(true);
 
+      // פותח ישירות את הצ'אט של התורם (אם יש טלפון) עם טקסט מוכן
       window.open(
         p
           ? `https://wa.me/${p}?text=${encodeURIComponent(bodyText)}`
           : `https://wa.me/?text=${encodeURIComponent(bodyText)}`,
         '_blank'
       );
-    } catch (e: any) {
-      // המשתמש ביטל את חלונית השיתוף — לא שגיאה אמיתית
-      if (e?.name !== 'AbortError') {
-        console.error(e);
-        alert('שגיאה בשיתוף');
-      }
+    } catch (e) {
+      console.error(e);
+      alert('שגיאה בשיתוף');
     } finally {
       setBusy(null);
     }
