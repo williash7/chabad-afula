@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { DoorOpen, Plus, X, Check, ChevronUp, ChevronDown, CalendarClock, CheckCircle2, Bell, Search } from 'lucide-react';
+import { DoorOpen, Plus, X, Check, ChevronUp, ChevronDown, CalendarClock, CalendarRange, CheckCircle2, Bell, Search, ClipboardList } from 'lucide-react';
 import {
   HomeVisitEntry, HomeVisitRound, HOME_VISIT_CATEGORY_TAGS, liveCategoryFor,
   emptyHomeVisitEntry, buildInitialRoundEntries,
@@ -14,7 +14,7 @@ export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; coun
     homeVisits, visibleDonors, crm, donations, holidays, holidayExtras,
     startHomeVisitRound, markHomeVisitDone, createHomeVisitTaskForEntry,
     updateHomeVisitEntry, reorderHomeVisitEntries, archiveHomeVisitRound,
-    removeHomeVisitEntry, addHomeVisitEntries,
+    removeHomeVisitEntry, addHomeVisitEntries, updateHomeVisitRoundMeta,
   } = useAppStore();
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -139,6 +139,7 @@ export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; coun
             onRemove={(name) => removeHomeVisitEntry(round.id, name)}
             onArchive={() => archiveHomeVisitRound(round.id)}
             onAddMore={() => openAddToRoundPicker(round.id)}
+            onUpdateMeta={(patch) => updateHomeVisitRoundMeta(round.id, patch)}
           />
         ))}
 
@@ -217,7 +218,7 @@ export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; coun
 
 function RoundCard({
   round, crm, holidayNames, hasOpenTask,
-  onUpdateEntry, onReorder, onMarkDone, onCreateTask, onRemove, onArchive, onAddMore,
+  onUpdateEntry, onReorder, onMarkDone, onCreateTask, onRemove, onArchive, onAddMore, onUpdateMeta,
 }: {
   round: HomeVisitRound;
   crm: Record<string, any>;
@@ -230,9 +231,27 @@ function RoundCard({
   onRemove: (name: string) => void;
   onArchive: () => void;
   onAddMore: () => void;
+  onUpdateMeta: (patch: Partial<HomeVisitRound>) => void;
 } & { key?: any }) {
   const visited = round.entries.filter(e => e.visited).length;
   const allVisited = round.entries.length > 0 && visited === round.entries.length;
+  const [prepText, setPrepText] = useState('');
+
+  const addPrepTask = () => {
+    if (!prepText.trim()) return;
+    onUpdateMeta({ prepTasks: [...(round.prepTasks || []), { text: prepText.trim(), done: false }] });
+    setPrepText('');
+  };
+  const togglePrepTask = (idx: number) => {
+    const tasks = [...(round.prepTasks || [])];
+    tasks[idx] = { ...tasks[idx], done: !tasks[idx].done };
+    onUpdateMeta({ prepTasks: tasks });
+  };
+  const removePrepTask = (idx: number) => {
+    const tasks = [...(round.prepTasks || [])];
+    tasks.splice(idx, 1);
+    onUpdateMeta({ prepTasks: tasks });
+  };
 
   return (
     <div>
@@ -252,6 +271,67 @@ function RoundCard({
           >
             <CheckCircle2 size={12} /> סיים מערך
           </button>
+        </div>
+      </div>
+
+      {/* ייעוד המערך + טווח תאריכים + משימות הכנה — מטא-דאטה של המערך עצמו, לא של איש קשר ספציפי */}
+      <div className="bg-white rounded-xl p-3 shadow-sm border border-[#EDE6D6] mb-3 space-y-2">
+        <input
+          value={round.purpose || ''}
+          onChange={e => onUpdateMeta({ purpose: e.target.value })}
+          type="text"
+          placeholder="ייעוד המערך (למשל: לקראת ראש השנה)..."
+          className="w-full bg-[#FAF6EE] border border-[#EDE6D6] rounded-lg px-2.5 py-1.5 text-sm font-medium outline-none focus:border-[#C9A84C]"
+        />
+        <label className="flex items-center gap-2 text-[11px] text-gray-500">
+          <CalendarRange size={12} className="shrink-0" />
+          <span className="shrink-0">טווח תאריכים:</span>
+          <input
+            value={round.dateRangeStart || ''}
+            onChange={e => onUpdateMeta({ dateRangeStart: e.target.value })}
+            type="date"
+            className="flex-1 min-w-0 bg-[#FAF6EE] border border-[#EDE6D6] rounded-md px-2 py-1 text-xs outline-none focus:border-[#C9A84C]"
+          />
+          <span className="shrink-0">עד</span>
+          <input
+            value={round.dateRangeEnd || ''}
+            onChange={e => onUpdateMeta({ dateRangeEnd: e.target.value })}
+            type="date"
+            className="flex-1 min-w-0 bg-[#FAF6EE] border border-[#EDE6D6] rounded-md px-2 py-1 text-xs outline-none focus:border-[#C9A84C]"
+          />
+        </label>
+
+        <div>
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-1">
+            <ClipboardList size={12} /> משימות לפני תחילת הביקורים
+          </div>
+          {(round.prepTasks || []).length > 0 && (
+            <div className="space-y-1 mb-1.5">
+              {(round.prepTasks || []).map((pt, i) => (
+                <div key={i} className="flex items-center gap-1.5 bg-[#FAF6EE] border border-[#EDE6D6] rounded-md px-2 py-1">
+                  <button
+                    onClick={() => togglePrepTask(i)}
+                    className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${pt.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}
+                  >
+                    {pt.done && <Check size={9} className="text-white" />}
+                  </button>
+                  <span className={`flex-1 text-xs ${pt.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{pt.text}</span>
+                  <button onClick={() => removePrepTask(i)} className="text-red-300 hover:text-red-500 shrink-0"><X size={11} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-1.5">
+            <input
+              value={prepText}
+              onChange={e => setPrepText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addPrepTask()}
+              type="text"
+              placeholder="משימת הכנה חדשה..."
+              className="flex-1 bg-[#FAF6EE] border border-[#EDE6D6] rounded-md px-2 py-1 text-xs outline-none focus:border-[#C9A84C]"
+            />
+            <button onClick={addPrepTask} className="bg-[#0D1B2A] text-[#E8C97A] rounded-md px-2 shrink-0"><Plus size={12} /></button>
+          </div>
         </div>
       </div>
 

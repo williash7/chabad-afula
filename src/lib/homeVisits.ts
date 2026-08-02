@@ -1,4 +1,5 @@
 import { computeOverdueContacts } from './contactFocus';
+import { SubTask } from './tasks';
 
 export interface HomeVisitEntry {
   name: string;
@@ -17,6 +18,10 @@ export interface HomeVisitRound {
   createdAt: string; // ISO
   status: 'active' | 'archived';
   entries: HomeVisitEntry[]; // סדר המערך = סדר הביקורים
+  purpose?: string;          // ייעוד המערך — למה מיועדים הביקורים האלה (למשל: "לקראת ראש השנה")
+  dateRangeStart?: string;   // ISO yyyy-mm-dd — טווח התאריכים שבו מתוכננים הביקורים
+  dateRangeEnd?: string;     // ISO yyyy-mm-dd
+  prepTasks?: SubTask[];     // משימות הכנה לביצוע לפני תחילת הביקורים
 }
 
 export interface HomeVisitsData {

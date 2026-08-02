@@ -16,7 +16,7 @@ import { logAction } from '../lib/score';
 import { computeSummarySince, computeDonorTotalSince } from '../lib/donationFilter';
 import { HistoryEntry, buildHistoryEntry, countAttendance, sumBudget, findLatestHistoryFor, tasksFromHistory } from '../lib/history';
 import { STANDALONE_TASKS_ID, createHomeVisitTask, createHolidayReminderTask, createEventReminderTask } from '../lib/tasks';
-import { HomeVisitEntry, HomeVisitsData, moveEntry } from '../lib/homeVisits';
+import { HomeVisitEntry, HomeVisitRound, HomeVisitsData, moveEntry } from '../lib/homeVisits';
 import { buildHolidayList } from '../lib/holidayList';
 import { computeMissingHolidayReminders } from '../lib/holidayAutoTasks';
 import { computeMissingEventReminders } from '../lib/eventAutoTasks';
@@ -63,6 +63,7 @@ interface AppState {
   archiveHomeVisitRound: (roundId: string) => void;
   removeHomeVisitEntry: (roundId: string, name: string) => void;
   addHomeVisitEntries: (roundId: string, entries: HomeVisitEntry[]) => void;
+  updateHomeVisitRoundMeta: (roundId: string, patch: Partial<HomeVisitRound>) => void;
 }
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -555,6 +556,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // מעדכן מטא-דאטה של המערך עצמו (ייעוד/טווח תאריכים/משימות הכנה) — לא נוגע ברשימת האנשים.
+  const updateHomeVisitRoundMeta = (roundId: string, patch: Partial<HomeVisitRound>) => {
+    setHomeVisits(prev => {
+      const next = { rounds: prev.rounds.map(r => r.id === roundId ? { ...r, ...patch } : r) };
+      saveHomeVisitsDataCloud(next);
+      return next;
+    });
+  };
+
   // בכל טעינה/רענון — בודק אילו חגים נכנסו לטווח 30 הימים ועדיין אין להם משימת
   // "לעדכן את החג", ומוסיף אותה אוטומטית (לתוך המשימות של אותו חג עצמו, כדי
   // שתופיע גם בכרטיסיית "משימות" וגם בכרטיס החג המלא). ממתין ל-loading===false
@@ -608,7 +618,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       archiveOccurrence, importTasksFromHistory, updateHistoryEntry,
       homeVisits, startHomeVisitRound, markHomeVisitDone, createHomeVisitTaskForEntry,
       updateHomeVisitEntry, reorderHomeVisitEntries, archiveHomeVisitRound,
-      removeHomeVisitEntry, addHomeVisitEntries,
+      removeHomeVisitEntry, addHomeVisitEntries, updateHomeVisitRoundMeta,
     }}>
       {children}
     </AppContext.Provider>
