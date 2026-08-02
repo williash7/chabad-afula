@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, CalendarDays, PieChart, CalendarCheck, Settings, ClipboardList, TrendingUp, HandCoins, History } from 'lucide-react';
+import { Home, Users, CalendarDays, PieChart, CalendarCheck, Settings, ClipboardList, TrendingUp, HandCoins, History, DoorOpen } from 'lucide-react';
 
 interface BottomNavProps {
   currentTab: string;
@@ -12,6 +12,7 @@ export function BottomNav({ currentTab, setTab }: BottomNavProps) {
     { id: 'tasks', icon: ClipboardList, label: 'משימות' },
     { id: 'score', icon: TrendingUp, label: 'ניקוד' },
     { id: 'donors', icon: Users, label: 'אנשי קשר' },
+    { id: 'homevisits', icon: DoorOpen, label: 'ביקורי בית' },
     { id: 'donations', icon: HandCoins, label: 'תרומות' },
     { id: 'events', icon: CalendarCheck, label: 'אירועים' },
     { id: 'calendar', icon: CalendarDays, label: 'חגים' },

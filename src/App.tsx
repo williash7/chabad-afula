@@ -11,6 +11,7 @@ import { ReportsTab } from './components/ReportsTab';
 import { PosterTab } from './components/PosterTab';
 import { SettingsTab } from './components/SettingsTab';
 import { TasksTab } from './components/TasksTab';
+import { HomeVisitsTab } from './components/HomeVisitsTab';
 import { ScoreTab } from './components/ScoreTab';
 import { DonationsTab } from './components/DonationsTab';
 import { HistoryTab } from './components/HistoryTab';
@@ -26,6 +27,7 @@ const ADD_LABELS: Record<string, string> = {
   tasks: 'משימה',
   events: 'אירוע',
   calendar: 'חג מותאם',
+  homevisits: 'מערך ביקורים',
 };
 
 function AppContent() {
@@ -64,6 +66,7 @@ function AppContent() {
         <main className="flex-1 min-w-0 pb-20 md:pb-6">
           {activeTab === 'home' && <HomeTab setTab={setActiveTab} onDonationClick={() => setIsDonationOpen(true)} />}
           {activeTab === 'donors' && <DonorsTab addTrigger={addTrigger} />}
+          {activeTab === 'homevisits' && <HomeVisitsTab addTrigger={addTrigger} />}
           {activeTab === 'donations' && <DonationsTab />}
           {activeTab === 'events' && <EventsTab addTrigger={addTrigger} />}
           {activeTab === 'calendar' && <CalendarTab addTrigger={addTrigger} />}

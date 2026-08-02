@@ -5,6 +5,7 @@ import { X, Check, MessageSquare, FileText, ExternalLink, Loader2, Download, Cli
 import { createInviteTask, inviteRemainingMinutes, toggleInvitePerson, MINUTES_PER_CALL } from '../lib/tasks';
 import { logAction } from '../lib/score';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
+import { TaskDetailsPanel } from './TaskDetailsPanel';
 import { findLatestHistoryFor } from '../lib/history';
 import { Archive } from 'lucide-react';
 
@@ -149,6 +150,20 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
   const deleteTask = (idx: number) => {
     const nextTasks = [...(extra.tasks || [])];
     nextTasks.splice(idx, 1);
+    updateHolidayExtras(id, { tasks: nextTasks });
+  };
+
+  // "לדלג" — סוגר משימת "לעדכן את החג" (kind:'holidayReminder') בלי לספור כביצוע בפועל.
+  const skipTask = (idx: number) => {
+    const nextTasks = [...(extra.tasks || [])];
+    const cur = nextTasks[idx];
+    nextTasks[idx] = cur.skipped ? { ...cur, done: false, skipped: false } : { ...cur, done: true, skipped: true };
+    updateHolidayExtras(id, { tasks: nextTasks });
+  };
+
+  const patchTask = (idx: number, patch: Partial<any>) => {
+    const nextTasks = [...(extra.tasks || [])];
+    nextTasks[idx] = { ...nextTasks[idx], ...patch };
     updateHolidayExtras(id, { tasks: nextTasks });
   };
 
@@ -537,14 +552,27 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
                       );
                     })}
                   </div>
+                  <TaskDetailsPanel task={t} onPatch={patch => patchTask(i, patch)} />
                 </div>
               ) : (
-                <div key={i} className="bg-white rounded-xl p-3 shadow-sm flex items-center gap-3">
-                  <div onClick={() => toggleTask(i)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 cursor-pointer ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
-                    {t.done && <Check size={12} className="text-white" />}
+                <div key={i} className="bg-white rounded-xl p-3 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div onClick={() => toggleTask(i)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 cursor-pointer ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
+                      {t.done && <Check size={12} className="text-white" />}
+                    </div>
+                    <span onClick={() => toggleTask(i)} className={`text-sm flex-1 cursor-pointer ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+                    {t.kind === 'holidayReminder' && (
+                      <button
+                        onClick={() => skipTask(i)}
+                        className={`text-[10px] px-2 py-1 rounded-full border shrink-0 whitespace-nowrap ${t.skipped ? 'bg-[#FEF3C7] border-[#F59E0B] text-[#92400E]' : 'bg-[#FAF6EE] border-[#EDE6D6] text-gray-500'}`}
+                        title={t.skipped ? 'בטל דילוג' : 'לדלג הפעם — לא צריך לעדכן'}
+                      >
+                        {t.skipped ? '↩️ בוטל' : '⏭️ לדלג'}
+                      </button>
+                    )}
+                    <button onClick={() => deleteTask(i)} className="text-red-300 hover:text-red-500 shrink-0" title="מחק משימה"><X size={14} /></button>
                   </div>
-                  <span onClick={() => toggleTask(i)} className={`text-sm flex-1 cursor-pointer ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
-                  <button onClick={() => deleteTask(i)} className="text-red-300 hover:text-red-500 shrink-0" title="מחק משימה"><X size={14} /></button>
+                  <TaskDetailsPanel task={t} onPatch={patch => patchTask(i, patch)} />
                 </div>
               )
             )) : null}

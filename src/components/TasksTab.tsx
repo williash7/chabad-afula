@@ -3,6 +3,7 @@ import { useAppStore } from '../store/AppContext';
 import { Check, ClipboardList, Calendar, CalendarCheck, Cake, X, ChevronLeft, Plus, Clock, ListTodo } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
 import { HolidayModal } from './HolidayModal';
+import { TaskDetailsPanel } from './TaskDetailsPanel';
 import { QuickLogButtons } from './QuickLogButtons';
 import { computePersonalDateEvents } from '../lib/personalDates';
 import { inviteRemainingMinutes, toggleInvitePerson, STANDALONE_TASKS_ID, nextEventOccurrence, formatRemaining } from '../lib/tasks';
@@ -10,7 +11,7 @@ import { getCustomHols } from '../lib/api';
 import { logAction } from '../lib/score';
 
 export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; addTrigger?: { tab: string; count: number } }) {
-  const { holidayExtras, updateHolidayExtras, eventsData, updateEventsData, visibleDonors, crm, holidays } = useAppStore();
+  const { holidayExtras, updateHolidayExtras, eventsData, updateEventsData, visibleDonors, crm, holidays, markHomeVisitDone } = useAppStore();
   const [selectedDonor, setSelectedDonor] = useState<string | null>(null);
   const [selectedHoliday, setSelectedHoliday] = useState<any | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -97,6 +98,12 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
   };
 
+  const patchStandaloneTask = (idx: number, patch: Partial<any>) => {
+    const tasks = [...allStandaloneTasks];
+    tasks[idx] = { ...tasks[idx], ...patch };
+    updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
+  };
+
   const toggleStandaloneInvitePerson = (idx: number, person: string) => {
     const wasDone = (allStandaloneTasks[idx]?.doneNames || []).includes(person);
     const tasks = [...allStandaloneTasks];
@@ -134,6 +141,21 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     updateHolidayExtras(holidayId, { tasks });
   };
 
+  const patchHolidayTask = (holidayId: string, idx: number, patch: Partial<any>) => {
+    const tasks = [...(holidayExtras[holidayId]?.tasks || [])];
+    tasks[idx] = { ...tasks[idx], ...patch };
+    updateHolidayExtras(holidayId, { tasks });
+  };
+
+  // "לדלג" — סוגר את משימת "לעדכן את החג" בלי לספור אותה כביצוע בפועל (לא מנוקד).
+  // לחיצה חוזרת כשהיא מסומנת כ"דילוג" מבטלת את הדילוג ומחזירה אותה לפתוחה.
+  const skipHolidayTask = (holidayId: string, idx: number) => {
+    const tasks = [...(holidayExtras[holidayId]?.tasks || [])];
+    const cur = tasks[idx];
+    tasks[idx] = cur.skipped ? { ...cur, done: false, skipped: false } : { ...cur, done: true, skipped: true };
+    updateHolidayExtras(holidayId, { tasks });
+  };
+
   const toggleHolidayInvitePerson = (holidayId: string, idx: number, person: string) => {
     const tasks = [...(holidayExtras[holidayId]?.tasks || [])];
     const wasDone = (tasks[idx]?.doneNames || []).includes(person);
@@ -159,6 +181,15 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
       if (e.id !== eventId) return e;
       const tasks = [...(e.tasks || [])];
       tasks.splice(idx, 1);
+      return { ...e, tasks };
+    }));
+  };
+
+  const patchEventTask = (eventId: string, idx: number, patch: Partial<any>) => {
+    updateEventsData((eventsData as any[]).map((e: any) => {
+      if (e.id !== eventId) return e;
+      const tasks = [...(e.tasks || [])];
+      tasks[idx] = { ...tasks[idx], ...patch };
       return { ...e, tasks };
     }));
   };
@@ -189,7 +220,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     setIsAddOpen(false);
   };
 
-  const renderTaskItem = (t: any, onToggle: () => void, onDelete: () => void, onTogglePerson: (person: string) => void) => (
+  const renderTaskItem = (t: any, onToggle: () => void, onDelete: () => void, onTogglePerson: (person: string) => void, onPatch: (patch: Partial<any>) => void, extra?: React.ReactNode) => (
     t.kind === 'invite' ? (
       <div className="bg-white rounded-xl p-3 shadow-sm border border-[#EDE6D6]">
         <div className="flex items-center justify-between mb-2">
@@ -213,19 +244,24 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
             );
           })}
         </div>
+        <TaskDetailsPanel task={t} onPatch={onPatch} />
       </div>
     ) : (
-      <div className="bg-white rounded-xl p-3 shadow-sm border border-[#EDE6D6] flex items-center gap-3">
-        <div onClick={onToggle} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 cursor-pointer ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
-          {t.done && <Check size={12} className="text-white" />}
+      <div className="bg-white rounded-xl p-3 shadow-sm border border-[#EDE6D6]">
+        <div className="flex items-center gap-3">
+          <div onClick={onToggle} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 cursor-pointer ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
+            {t.done && <Check size={12} className="text-white" />}
+          </div>
+          <div className="flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
+            <span className={`text-sm ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+            {t.dueDate && !t.done && (
+              <div className="text-[10px] text-[#9B7A2F] flex items-center gap-1 mt-0.5"><Clock size={10} /> {formatRemaining(new Date(t.dueDate), new Date())}</div>
+            )}
+          </div>
+          {extra}
+          <button onClick={onDelete} className="text-red-300 hover:text-red-500 shrink-0" title="מחק משימה"><X size={14} /></button>
         </div>
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
-          <span className={`text-sm ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
-          {t.dueDate && !t.done && (
-            <div className="text-[10px] text-[#9B7A2F] flex items-center gap-1 mt-0.5"><Clock size={10} /> {formatRemaining(new Date(t.dueDate), new Date())}</div>
-          )}
-        </div>
-        <button onClick={onDelete} className="text-red-300 hover:text-red-500 shrink-0" title="מחק משימה"><X size={14} /></button>
+        <TaskDetailsPanel task={t} onPatch={onPatch} />
       </div>
     )
   );
@@ -303,7 +339,22 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
                     <div className="space-y-2">
                       {g.tasks.map(({ t, idx }: any) => (
                         <div key={idx}>
-                          {renderTaskItem(t, () => toggleHolidayTask(g.id, idx), () => deleteHolidayTask(g.id, idx), p => toggleHolidayInvitePerson(g.id, idx, p))}
+                          {renderTaskItem(
+                            t,
+                            () => toggleHolidayTask(g.id, idx),
+                            () => deleteHolidayTask(g.id, idx),
+                            p => toggleHolidayInvitePerson(g.id, idx, p),
+                            patch => patchHolidayTask(g.id, idx, patch),
+                            t.kind === 'holidayReminder' ? (
+                              <button
+                                onClick={() => skipHolidayTask(g.id, idx)}
+                                className={`text-[10px] px-2 py-1 rounded-full border shrink-0 whitespace-nowrap ${t.skipped ? 'bg-[#FEF3C7] border-[#F59E0B] text-[#92400E]' : 'bg-[#FAF6EE] border-[#EDE6D6] text-gray-500'}`}
+                                title={t.skipped ? 'בטל דילוג' : 'לדלג הפעם — לא צריך לעדכן'}
+                              >
+                                {t.skipped ? '↩️ בוטל' : '⏭️ לדלג'}
+                              </button>
+                            ) : undefined
+                          )}
                         </div>
                       ))}
                     </div>
@@ -339,7 +390,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
                     <div className="space-y-2">
                       {g.tasks.map(({ t, idx }: any) => (
                         <div key={idx}>
-                          {renderTaskItem(t, () => toggleEventTask(g.id, idx), () => deleteEventTask(g.id, idx), p => toggleEventInvitePerson(g.id, idx, p))}
+                          {renderTaskItem(t, () => toggleEventTask(g.id, idx), () => deleteEventTask(g.id, idx), p => toggleEventInvitePerson(g.id, idx, p), patch => patchEventTask(g.id, idx, patch))}
                         </div>
                       ))}
                     </div>
@@ -363,7 +414,22 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
             <div className="space-y-2 mb-3">
               {standaloneTasks.map(({ t, idx }: any) => (
                 <div key={idx}>
-                  {renderTaskItem(t, () => toggleStandaloneTask(idx), () => deleteStandaloneTask(idx), p => toggleStandaloneInvitePerson(idx, p))}
+                  {renderTaskItem(
+                    t,
+                    t.kind === 'homeVisit' ? () => markHomeVisitDone(t.roundId, t.personName) : () => toggleStandaloneTask(idx),
+                    () => deleteStandaloneTask(idx),
+                    p => toggleStandaloneInvitePerson(idx, p),
+                    patch => patchStandaloneTask(idx, patch),
+                    t.kind === 'homeVisit' ? (
+                      <button
+                        onClick={() => setTab('homevisits')}
+                        className="text-[10px] px-2 py-1 rounded-full border border-[#EDE6D6] bg-[#FAF6EE] text-[#9B7A2F] shrink-0 whitespace-nowrap"
+                        title="פתח את מערך הביקורים"
+                      >
+                        🏠 מערך
+                      </button>
+                    ) : undefined
+                  )}
                 </div>
               ))}
             </div>

@@ -1,13 +1,28 @@
 // משימות חג/אירוע — כולל "משימת הזמנה" מיוחדת: רשימת אנשים להתקשר אליהם,
 // עם צ'קליסט לפי איש והערכת זמן כוללת (3 דקות שיחה לכל אדם).
 
+export interface SubTask {
+  text: string;
+  done: boolean;
+}
+
 export interface TaskItem {
   text: string;
   done: boolean;
-  kind?: 'invite';
+  kind?: 'invite' | 'holidayReminder' | 'homeVisit' | 'eventReminder';
   people?: string[];
   doneNames?: string[];
-  dueDate?: string; // ISO date, רק למשימות חד-פעמיות שאין להן תאריך טבעי (חג/אירוע)
+  dueDate?: string; // ISO date, רק למשימות חד-פעמיות שאין להן תאריך טבעי (חג/אירוע), וגם מזהה המופע למשימות kind:'eventReminder'
+  skipped?: boolean; // true = הושלמה כ"לא עושים כלום" ולא כביצוע בפועל (רק למשימות kind:'holidayReminder')
+  roundId?: string; // מזהה מערך ביקורי הבית שהמשימה נוצרה ממנו (רק למשימות kind:'homeVisit')
+  personName?: string; // שם איש הקשר שהמשימה נוגעת אליו (רק למשימות kind:'homeVisit')
+  // פרטים נוספים — רלוונטיים לכל סוגי המשימות (לא רק kind ספציפי)
+  time?: string;       // שעה, HH:MM
+  location?: string;   // מקום
+  startTime?: string;  // תחילת טווח (HH:MM), אם יש משך זמן
+  endTime?: string;    // סוף טווח (HH:MM)
+  notes?: string;      // פרטים נוספים חופשיים
+  subtasks?: SubTask[];
 }
 
 export const MINUTES_PER_CALL = 3;
@@ -77,4 +92,38 @@ export function toggleInvitePerson(task: TaskItem, personName: string): TaskItem
     : [...doneNames, personName];
   const total = task.people?.length || 0;
   return { ...task, doneNames: nextDone, done: total > 0 && nextDone.length >= total };
+}
+
+// משימת "לעדכן את החג X" — נוצרת אוטומטית 30 יום לפני חג (ראה holidayAutoTasks.ts).
+export function createHolidayReminderTask(holidayName: string): TaskItem {
+  return { text: `🗓️ לעדכן את החג — ${holidayName}`, done: false, kind: 'holidayReminder' };
+}
+
+// משימת "ביקור בית: X" — נוצרת אוטומטית ל-5 האנשים הראשונים כשמתחילים מערך ביקורים חדש.
+export function createHomeVisitTask(personName: string, roundId: string): TaskItem {
+  return { text: `🏠 ביקור בית — ${personName}`, done: false, kind: 'homeVisit', roundId, personName };
+}
+
+// תזכורת יום לפני מופע של אירוע חוזר (ראה eventAutoTasks.ts) — dueDate הוא תאריך
+// המופע עצמו (YYYY-MM-DD), ומשמש גם כמזהה המופע כדי לא ליצור תזכורת כפולה לו,
+// וגם להצגת "כמה זמן נותר" (renderTaskItem הקיים כבר יודע להציג dueDate).
+export function createEventReminderTask(eventName: string, occurrenceDateISO: string): TaskItem {
+  return { text: `🔔 מחר — ${eventName}`, done: false, kind: 'eventReminder', dueDate: occurrenceDateISO };
+}
+
+export function addSubtask(task: TaskItem, text: string): TaskItem {
+  if (!text.trim()) return task;
+  return { ...task, subtasks: [...(task.subtasks || []), { text: text.trim(), done: false }] };
+}
+
+export function toggleSubtask(task: TaskItem, idx: number): TaskItem {
+  const subtasks = [...(task.subtasks || [])];
+  subtasks[idx] = { ...subtasks[idx], done: !subtasks[idx].done };
+  return { ...task, subtasks };
+}
+
+export function removeSubtask(task: TaskItem, idx: number): TaskItem {
+  const subtasks = [...(task.subtasks || [])];
+  subtasks.splice(idx, 1);
+  return { ...task, subtasks };
 }

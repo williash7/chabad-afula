@@ -45,6 +45,7 @@ export const POINT_RULES = {
   holiday_custom:  { label: 'הוספת חג מותאם אישית',      points: 5,  category: 'planning'  },
   facebook_post:   { label: 'פרסום פוסט/סטטוס בפייסבוק',  points: 10, category: 'execution' },
   history_archive: { label: 'העברת חג/אירוע להיסטוריה',   points: 5,  category: 'planning'  },
+  home_visit:      { label: 'ביקור בית בוצע',            points: 20, category: 'execution' },
 } as const satisfies Record<string, PointRule>;
 
 export type PointRuleKey = keyof typeof POINT_RULES;

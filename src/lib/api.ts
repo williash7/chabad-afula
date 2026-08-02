@@ -127,6 +127,15 @@ export function saveHistoryData(data: any[]) {
   localStorage.setItem('history_data', JSON.stringify(data));
 }
 
+export function getHomeVisitsData(): any {
+  try { return JSON.parse(localStorage.getItem('home_visits_data') || '{"rounds":[]}'); }
+  catch { return { rounds: [] }; }
+}
+
+export function saveHomeVisitsData(data: any) {
+  localStorage.setItem('home_visits_data', JSON.stringify(data));
+}
+
 export function getCustomHols(): any[] {
   try { return JSON.parse(localStorage.getItem('custom_hols') || '[]'); }
   catch { return []; }
@@ -200,6 +209,22 @@ export async function getHistoryDataCloud(): Promise<any[]> {
 export async function saveHistoryDataCloud(data: any[]): Promise<void> {
   saveHistoryData(data);
   apiPost('saveHistory', { data }).catch(console.error); // אם הפעולה עוד לא קיימת בשרת — נכשל בשקט, הנתונים עדיין נשמרים מקומית
+}
+
+export async function getHomeVisitsDataCloud(): Promise<any> {
+  try {
+    const res = await apiGet('getHomeVisits');
+    if (res.data && !res._error) {
+      saveHomeVisitsData(res.data);
+      return res.data;
+    }
+  } catch {}
+  return getHomeVisitsData();
+}
+
+export async function saveHomeVisitsDataCloud(data: any): Promise<void> {
+  saveHomeVisitsData(data);
+  apiPost('saveHomeVisits', { data }).catch(console.error); // אם הפעולה עוד לא קיימת בשרת — נכשל בשקט, הנתונים עדיין נשמרים מקומית
 }
 
 export async function createHolidayDoc(holidayName: string, dateStr: string): Promise<{ url: string; title: string; error?: string } | null> {

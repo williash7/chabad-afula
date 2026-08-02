@@ -8,6 +8,7 @@ import { slashDateToDotDate } from '../lib/dateUtils';
 import { findLatestHistoryFor } from '../lib/history';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
 import { FacebookPostAssistant } from './FacebookPostAssistant';
+import { TaskDetailsPanel } from './TaskDetailsPanel';
 
 export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: number } } = {}) {
   const { eventsData, updateEventsData, visibleDonors, crm, hk, failures, settings, refresh, history, archiveOccurrence, importTasksFromHistory } = useAppStore();
@@ -196,6 +197,13 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
     if (!currentTasksEvent) return;
     const nextTasks = [...(currentTasksEvent.tasks || [])];
     nextTasks.splice(idx, 1);
+    updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
+  };
+
+  const patchEventTask = (idx: number, patch: Partial<any>) => {
+    if (!currentTasksEvent) return;
+    const nextTasks = [...(currentTasksEvent.tasks || [])];
+    nextTasks[idx] = { ...nextTasks[idx], ...patch };
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
   };
 
@@ -545,14 +553,18 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                          );
                        })}
                      </div>
+                     <TaskDetailsPanel task={t} onPatch={patch => patchEventTask(i, patch)} />
                    </div>
                  ) : (
-                   <div key={i} className="bg-white rounded-xl p-3 shadow-sm flex items-center gap-3">
-                     <div onClick={() => toggleEventTask(i)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 cursor-pointer ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
-                       {t.done && <Check size={12} className="text-white" />}
+                   <div key={i} className="bg-white rounded-xl p-3 shadow-sm">
+                     <div className="flex items-center gap-3">
+                       <div onClick={() => toggleEventTask(i)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 cursor-pointer ${t.done ? 'bg-[#C9A84C] border-[#C9A84C]' : 'border-gray-300'}`}>
+                         {t.done && <Check size={12} className="text-white" />}
+                       </div>
+                       <span onClick={() => toggleEventTask(i)} className={`text-sm flex-1 cursor-pointer ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
+                       <button onClick={() => deleteEventTask(i)} className="text-red-300 hover:text-red-500 shrink-0" title="מחק משימה"><X size={14} /></button>
                      </div>
-                     <span onClick={() => toggleEventTask(i)} className={`text-sm flex-1 cursor-pointer ${t.done ? 'text-gray-400 line-through' : 'text-[#0D1B2A]'}`}>{t.text}</span>
-                     <button onClick={() => deleteEventTask(i)} className="text-red-300 hover:text-red-500 shrink-0" title="מחק משימה"><X size={14} /></button>
+                     <TaskDetailsPanel task={t} onPatch={patch => patchEventTask(i, patch)} />
                    </div>
                  )
                ))}
