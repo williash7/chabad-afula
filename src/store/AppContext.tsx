@@ -15,7 +15,7 @@ import { AppSettings, loadSettings, saveSettings, filterDonorsBySettings } from 
 import { logAction } from '../lib/score';
 import { computeSummarySince, computeDonorTotalSince } from '../lib/donationFilter';
 import { HistoryEntry, buildHistoryEntry, countAttendance, sumBudget, findLatestHistoryFor, tasksFromHistory } from '../lib/history';
-import { STANDALONE_TASKS_ID, createHomeVisitTask, createHolidayReminderTask, createEventReminderTask, createThankYouTask, computeMissingThankYouTasks } from '../lib/tasks';
+import { STANDALONE_TASKS_ID, createHomeVisitTask, createHolidayReminderTask, createEventReminderTask, createThankYouTask, computeMissingThankYouTasks, backfillEventTaskDates } from '../lib/tasks';
 import { HomeVisitEntry, HomeVisitRound, HomeVisitsData, moveEntry } from '../lib/homeVisits';
 import { buildHolidayList } from '../lib/holidayList';
 import { computeMissingHolidayReminders } from '../lib/holidayAutoTasks';
@@ -656,6 +656,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, [loading, donations, holidayExtras]);
+
+  // גיבוי חד-פעמי: ממלא תאריך אירוע גם למשימות אירוע קיימות שנוצרו לפני
+  // שמשימות אירוע חדשות התחילו לקבל את תאריך האירוע אוטומטית — ראה
+  // backfillEventTaskDates. רץ פעם אחת בלבד.
+  useEffect(() => {
+    if (loading || eventsData.length === 0) return;
+    if (localStorage.getItem('event_task_date_backfill_v1_done')) return;
+    localStorage.setItem('event_task_date_backfill_v1_done', 'true');
+    const { events: next, count } = backfillEventTaskDates(eventsData, new Date());
+    if (count === 0) return;
+    setEventsData(next);
+    saveEventsDataCloud(next);
+  }, [loading, eventsData]);
 
   useEffect(() => {
     loadAll();

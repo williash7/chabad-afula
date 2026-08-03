@@ -104,6 +104,28 @@ export function createEventMediaTasks(): TaskItem[] {
   ];
 }
 
+// גיבוי חד-פעמי: ממלא dueDate לכל משימת אירוע קיימת שעדיין אין לה תאריך משלה,
+// לפי המופע הקרוב הבא של האירוע כרגע — כדי שגם משימות ישנות (מלפני שמשימות
+// אירוע חדשות התחילו לקבל תאריך אוטומטית) יקבלו את תאריך האירוע בפועל, לא
+// רק חדשות. לא נוגע במשימות "מדיה" (קידום/צילום/סיכום) — אלה מכוונות במפורש
+// לפני/בזמן/אחרי האירוע, לא לאותו תאריך בדיוק.
+export function backfillEventTaskDates(events: any[], today: Date): { events: any[]; count: number } {
+  const mediaTexts = new Set(createEventMediaTasks().map(t => t.text));
+  let count = 0;
+  const next = events.map(ev => {
+    const occ = nextEventOccurrence(ev, today);
+    if (!occ) return ev;
+    const occIso = occ.toISOString().split('T')[0];
+    const tasks = (ev.tasks || []).map((t: any) => {
+      if (t.dueDate || mediaTexts.has(t.text)) return t;
+      count++;
+      return { ...t, dueDate: occIso };
+    });
+    return { ...ev, tasks };
+  });
+  return { events: next, count };
+}
+
 export function createInviteTask(label: string, people: string[]): TaskItem {
   return stampCreated({
     text: `📞 הזמנת ${label} — ${people.length} אנשים`,
