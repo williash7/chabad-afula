@@ -787,7 +787,15 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
               value={addTarget ? `${addTarget.kind}:${addTarget.id}` : ''}
               onChange={e => {
                 const [kind, id] = e.target.value.split(':');
-                setAddTarget(id ? { kind: kind as 'holiday' | 'event', id } : null);
+                if (!id) { setAddTarget(null); return; }
+                setAddTarget({ kind: kind as 'holiday' | 'event', id });
+                // משימת אירוע מקבלת אוטומטית את תאריך האירוע הקרוב, אלא אם המשתמש
+                // כבר בחר תאריך ידנית בעצמו — לא דורסים בחירה מפורשת.
+                if (kind === 'event' && !addDate) {
+                  const ev = (eventsData as any[]).find((e2: any) => e2.id === id);
+                  const occ = ev ? nextEventOccurrence(ev, new Date()) : null;
+                  if (occ) setAddDate(occ.toISOString().split('T')[0]);
+                }
               }}
               className="w-full border-2 border-[#EDE6D6] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A84C] bg-white mb-4"
             >

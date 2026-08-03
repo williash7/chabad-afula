@@ -513,18 +513,31 @@ function EntryRow({
               <input
                 type="checkbox"
                 checked={entry.scheduled}
-                onChange={e => onUpdate({ scheduled: e.target.checked, scheduledDate: e.target.checked ? entry.scheduledDate : undefined })}
+                onChange={e => onUpdate({
+                  scheduled: e.target.checked,
+                  scheduledDate: e.target.checked ? entry.scheduledDate : undefined,
+                  scheduledTime: e.target.checked ? entry.scheduledTime : undefined,
+                })}
                 className="accent-[#C9A84C]"
               />
               <CalendarClock size={12} /> קבעתי זמן
             </label>
             {entry.scheduled && (
-              <input
-                value={entry.scheduledDate || ''}
-                onChange={e => onUpdate({ scheduledDate: e.target.value })}
-                type="date"
-                className="bg-[#FAF6EE] border border-[#EDE6D6] rounded-lg px-2 py-1 text-xs outline-none focus:border-[#C9A84C]"
-              />
+              <>
+                <input
+                  value={entry.scheduledDate || ''}
+                  onChange={e => onUpdate({ scheduledDate: e.target.value })}
+                  type="date"
+                  className="bg-[#FAF6EE] border border-[#EDE6D6] rounded-lg px-2 py-1 text-xs outline-none focus:border-[#C9A84C]"
+                />
+                <input
+                  value={entry.scheduledTime || ''}
+                  onChange={e => onUpdate({ scheduledTime: e.target.value })}
+                  type="time"
+                  title="שעה (לא חובה)"
+                  className="bg-[#FAF6EE] border border-[#EDE6D6] rounded-lg px-2 py-1 text-xs outline-none focus:border-[#C9A84C]"
+                />
+              </>
             )}
 
             <span className="text-[10px] text-[#9B7A2F] bg-[#FDF6E3] px-1.5 py-0.5 rounded-full">{displayCategory}</span>

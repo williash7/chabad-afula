@@ -316,7 +316,15 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
-                        onClick={() => { setTasksEventId(ev.id); setAttCategory('all'); setAttSearch(''); }}
+                        onClick={() => {
+                          setTasksEventId(ev.id);
+                          setAttCategory('all');
+                          setAttSearch('');
+                          // משימת אירוע מקבלת אוטומטית את תאריך המפגש הקרוב של האירוע,
+                          // אלא אם המשתמש יבחר תאריך אחר בעצמו בטופס.
+                          setTaskDate(nextOcc ? nextOcc.toISOString().split('T')[0] : '');
+                          setTaskTime('');
+                        }}
                         className="relative bg-purple-50 text-purple-700 text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-transform flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <ClipboardList size={14}/> משימות

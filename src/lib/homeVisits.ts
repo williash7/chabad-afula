@@ -9,6 +9,7 @@ export interface HomeVisitEntry {
   emphasis?: string;         // דגש חופשי — מה חשוב להעלות בביקור הזה
   scheduled: boolean;
   scheduledDate?: string;    // ISO yyyy-mm-dd
+  scheduledTime?: string;    // HH:MM — אופציונלי, כמו בכל שאר סוגי המשימות
   visited: boolean;
   visitedDate?: string;      // ISO yyyy-mm-dd
 }
