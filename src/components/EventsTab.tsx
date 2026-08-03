@@ -196,7 +196,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
     if (!currentTasksEvent) return;
     const nextTasks = [...(currentTasksEvent.tasks || [])];
     const wasDone = nextTasks[idx].done;
-    nextTasks[idx] = { ...nextTasks[idx], done: !nextTasks[idx].done };
+    nextTasks[idx] = { ...nextTasks[idx], done: !nextTasks[idx].done, ...(wasDone ? {} : { doneAt: new Date().toISOString() }) };
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
     if (!wasDone) {
       logAction('task_complete');

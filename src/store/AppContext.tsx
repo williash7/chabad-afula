@@ -58,6 +58,7 @@ interface AppState {
   deleteHistoryEntry: (id: string) => void;
   startHomeVisitRound: (entries: HomeVisitEntry[]) => void;
   markHomeVisitDone: (roundId: string, name: string) => void;
+  unmarkHomeVisitDone: (roundId: string, name: string) => void;
   createHomeVisitTaskForEntry: (roundId: string, name: string) => void;
   updateHomeVisitEntry: (roundId: string, name: string, patch: Partial<HomeVisitEntry>) => void;
   reorderHomeVisitEntries: (roundId: string, from: number, to: number) => void;
@@ -510,13 +511,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setHolidayExtras(prev => {
       const cur = prev[STANDALONE_TASKS_ID] || {};
       const tasks = (cur.tasks || []).map((t: any) =>
-        t.kind === 'homeVisit' && t.roundId === roundId && t.personName === name ? { ...t, done: true } : t
+        t.kind === 'homeVisit' && t.roundId === roundId && t.personName === name ? { ...t, done: true, doneAt: new Date().toISOString() } : t
       );
       const next = { ...prev, [STANDALONE_TASKS_ID]: { ...cur, tasks } };
       saveHolidayExtrasCloud(next);
       return next;
     });
     logAction('home_visit');
+  };
+
+  // מבטל סימון "בוצע" לביקור בית — גם ברשומת המערך וגם במשימה התואמת. לשימוש
+  // מתצוגת "משימות שהושלמו" בהיסטוריה ("בטל ביצוע").
+  const unmarkHomeVisitDone = (roundId: string, name: string) => {
+    setHomeVisits(prev => {
+      const next = {
+        rounds: prev.rounds.map(r => r.id === roundId
+          ? { ...r, entries: r.entries.map(e => e.name === name ? { ...e, visited: false, visitedDate: undefined } : e) }
+          : r),
+      };
+      saveHomeVisitsDataCloud(next);
+      return next;
+    });
+    setHolidayExtras(prev => {
+      const cur = prev[STANDALONE_TASKS_ID] || {};
+      const tasks = (cur.tasks || []).map((t: any) =>
+        t.kind === 'homeVisit' && t.roundId === roundId && t.personName === name ? { ...t, done: false } : t
+      );
+      const next = { ...prev, [STANDALONE_TASKS_ID]: { ...cur, tasks } };
+      saveHolidayExtrasCloud(next);
+      return next;
+    });
   };
 
   // יוצר משימת "ביקור בית" ידנית לאיש קשר ספציפי במערך (למשל אחרי שהמשימות
@@ -696,7 +720,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addManualDonation, updateCrm, updateHolidayExtras, updateEventsData, updateRebbeDate,
       mergeContacts, unmergeContact, settings, updateSettings,
       archiveOccurrence, importTasksFromHistory, updateHistoryEntry, deleteHistoryEntry,
-      homeVisits, startHomeVisitRound, markHomeVisitDone, createHomeVisitTaskForEntry,
+      homeVisits, startHomeVisitRound, markHomeVisitDone, unmarkHomeVisitDone, createHomeVisitTaskForEntry,
       updateHomeVisitEntry, reorderHomeVisitEntries, archiveHomeVisitRound, deleteHomeVisitRound,
       removeHomeVisitEntry, addHomeVisitEntries, updateHomeVisitRoundMeta,
     }}>

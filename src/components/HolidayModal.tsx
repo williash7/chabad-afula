@@ -138,7 +138,7 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
   const toggleTask = (idx: number) => {
     const nextTasks = [...(extra.tasks || [])];
     const wasDone = nextTasks[idx].done;
-    nextTasks[idx].done = !nextTasks[idx].done;
+    nextTasks[idx] = { ...nextTasks[idx], done: !nextTasks[idx].done, ...(wasDone ? {} : { doneAt: new Date().toISOString() }) };
     updateHolidayExtras(id, { tasks: nextTasks });
     if (!wasDone) {
       logAction('task_complete');

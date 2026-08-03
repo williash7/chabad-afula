@@ -26,6 +26,7 @@ export interface TaskItem {
   urgent?: boolean;     // ציר "דחוף" של מטריצת אייזנהאואר
   important?: boolean;  // ציר "חשוב" של מטריצת אייזנהאואר
   donationDate?: string; // dd/MM/yyyy — התאריך של התרומה שיצרה משימת kind:'thankYou' זו (למניעת כפילות)
+  doneAt?: string;      // ISO — מתויג אוטומטית כשמסמנים done=true, לשימוש בתצוגת "משימות שהושלמו" בהיסטוריה
 }
 
 export type EisenhowerQuadrant = 'do' | 'schedule' | 'delegate' | 'eliminate';

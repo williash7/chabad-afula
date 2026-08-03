@@ -143,7 +143,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const toggleStandaloneTask = (idx: number) => {
     const wasDone = allStandaloneTasks[idx]?.done;
     const tasks = [...allStandaloneTasks];
-    tasks[idx] = { ...tasks[idx], done: !tasks[idx].done };
+    tasks[idx] = { ...tasks[idx], done: !tasks[idx].done, ...(wasDone ? {} : { doneAt: new Date().toISOString() }) };
     updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
     if (!wasDone) {
       logAction('task_complete');
@@ -199,7 +199,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const toggleHolidayTask = (holidayId: string, idx: number) => {
     const tasks = [...(holidayExtras[holidayId]?.tasks || [])];
     const wasDone = tasks[idx]?.done;
-    tasks[idx] = { ...tasks[idx], done: !tasks[idx].done };
+    tasks[idx] = { ...tasks[idx], done: !tasks[idx].done, ...(wasDone ? {} : { doneAt: new Date().toISOString() }) };
     updateHolidayExtras(holidayId, { tasks });
     if (!wasDone) {
       logAction('task_complete');
@@ -243,7 +243,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     updateEventsData((eventsData as any[]).map((e: any) => {
       if (e.id !== eventId) return e;
       const tasks = [...(e.tasks || [])];
-      tasks[idx] = { ...tasks[idx], done: !tasks[idx].done };
+      tasks[idx] = { ...tasks[idx], done: !tasks[idx].done, ...(wasDone ? {} : { doneAt: new Date().toISOString() }) };
       return { ...e, tasks };
     }));
     if (!wasDone) {

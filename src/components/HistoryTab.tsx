@@ -1,15 +1,92 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { History, Users, Wallet, ChevronDown, Lightbulb, X, Plus, Trash2 } from 'lucide-react';
+import { History, Users, Wallet, ChevronDown, Lightbulb, X, Plus, Trash2, CheckCircle2, RotateCcw } from 'lucide-react';
 import { countAttendance, sumBudget, HistoryEntry } from '../lib/history';
+import { STANDALONE_TASKS_ID, PERSONAL_DATE_EXTRAS_ID } from '../lib/tasks';
+
+const COMPLETED_TASKS_PAGE = 15;
 
 export function HistoryTab() {
-  const { history, updateHistoryEntry, deleteHistoryEntry, visibleDonors } = useAppStore();
+  const {
+    history, updateHistoryEntry, deleteHistoryEntry, visibleDonors,
+    holidayExtras, eventsData, updateHolidayExtras, updateEventsData, unmarkHomeVisitDone,
+  } = useAppStore();
   const [filter, setFilter] = useState<'all' | 'holiday' | 'event'>('all');
   const [openId, setOpenId] = useState<string | null>(null);
   const [forms, setForms] = useState<Record<string, { good: string; improve: string; plan: string }>>({});
   const [attNameInput, setAttNameInput] = useState<Record<string, string>>({});
   const [newAttDate, setNewAttDate] = useState('');
+  const [showAllCompleted, setShowAllCompleted] = useState(false);
+
+  // משימות שהושלמו (done:true) מכל שלושת מקורות המשימות — נשארות במקום
+  // המקורי שלהן (לא מועברות/משוכפלות לשום מקום), רק נאספות כאן לתצוגה +
+  // "בטל ביצוע" חוזר אל אותו מקור. "לדלג" (skipped) אינו נחשב ביצוע בפועל
+  // ולכן לא מופיע כאן — עקבי עם שאר האפליקציה שלא סופרת דילוג כביצוע.
+  const completedTasks = useMemo(() => {
+    const rows: { key: string; text: string; contextLabel: string; doneAt?: string; onUndo: () => void }[] = [];
+
+    Object.keys(holidayExtras).forEach(id => {
+      if (id === STANDALONE_TASKS_ID || id === PERSONAL_DATE_EXTRAS_ID) return;
+      (holidayExtras[id]?.tasks || []).forEach((t: any, idx: number) => {
+        if (!t.done || t.skipped) return;
+        rows.push({
+          key: `h-${id}-${idx}`,
+          text: t.text,
+          contextLabel: `🗓️ ${id}`,
+          doneAt: t.doneAt,
+          onUndo: () => {
+            const tasks = [...(holidayExtras[id]?.tasks || [])];
+            tasks[idx] = { ...tasks[idx], done: false };
+            updateHolidayExtras(id, { tasks });
+          },
+        });
+      });
+    });
+
+    (eventsData as any[]).forEach(ev => {
+      (ev.tasks || []).forEach((t: any, idx: number) => {
+        if (!t.done) return;
+        rows.push({
+          key: `e-${ev.id}-${idx}`,
+          text: t.text,
+          contextLabel: `📅 ${ev.name}`,
+          doneAt: t.doneAt,
+          onUndo: () => {
+            updateEventsData((eventsData as any[]).map((e: any) => {
+              if (e.id !== ev.id) return e;
+              const tasks = [...(e.tasks || [])];
+              tasks[idx] = { ...tasks[idx], done: false };
+              return { ...e, tasks };
+            }));
+          },
+        });
+      });
+    });
+
+    const standalone: any[] = holidayExtras[STANDALONE_TASKS_ID]?.tasks || [];
+    standalone.forEach((t: any, idx: number) => {
+      if (!t.done) return;
+      rows.push({
+        key: `s-${idx}`,
+        text: t.text,
+        contextLabel: '📌 חד-פעמית',
+        doneAt: t.doneAt,
+        onUndo: () => {
+          if (t.kind === 'homeVisit') {
+            unmarkHomeVisitDone(t.roundId, t.personName);
+          } else {
+            const tasks = [...standalone];
+            tasks[idx] = { ...tasks[idx], done: false };
+            updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
+          }
+        },
+      });
+    });
+
+    return rows.sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || ''));
+  }, [holidayExtras, eventsData, updateHolidayExtras, updateEventsData, unmarkHomeVisitDone]);
+
+  const visibleCompletedTasks = showAllCompleted ? completedTasks : completedTasks.slice(0, COMPLETED_TASKS_PAGE);
 
   const sorted = useMemo(
     () => [...history].sort((a, b) => new Date(b.archivedAt).getTime() - new Date(a.archivedAt).getTime()),
@@ -91,6 +168,49 @@ export function HistoryTab() {
       <div className="p-4 md:p-6">
         <div className="bg-white rounded-xl p-3.5 border border-[#EDE6D6] shadow-sm mb-4 text-[11px] text-gray-500 leading-relaxed">
           כדי להעביר חג או אירוע לכאן, פתחו אותו ולחצו על <b>"סמן כהסתיים והעבר להיסטוריה"</b>. הפעולה שומרת תמונת מצב (נוכחות, תקציב, משימות) ומרוקנת את המשימות של המופע החי כדי שהשנה הבאה תתחיל נקי — אפשר לייבא בחזרה את אותן משימות בלחיצת כפתור. נוכחות ותקציב ניתנים לעריכה גם כאן, אחרי ההעברה.
+        </div>
+
+        {/* משימות שהושלמו — נשארות במקומן המקורי, רק נאספות כאן עם אפשרות "בטל ביצוע" */}
+        <div className="bg-white rounded-xl border border-[#EDE6D6] shadow-sm mb-4 overflow-hidden">
+          <div className="flex items-center gap-1.5 px-3.5 py-3 border-b border-[#EDE6D6]">
+            <CheckCircle2 size={15} className="text-green-600 shrink-0" />
+            <span className="font-bold text-sm text-[#0D1B2A]">משימות שהושלמו</span>
+            <span className="text-[11px] text-gray-400 mr-auto">{completedTasks.length}</span>
+          </div>
+          {completedTasks.length === 0 ? (
+            <div className="text-center py-5 text-gray-400 text-xs">עדיין אין משימות שהושלמו</div>
+          ) : (
+            <>
+              <div className="divide-y divide-[#EDE6D6]">
+                {visibleCompletedTasks.map(row => (
+                  <div key={row.key} className="flex items-center justify-between gap-2 px-3.5 py-2.5">
+                    <div className="min-w-0">
+                      <div className="text-sm text-[#0D1B2A] truncate">{row.text}</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">
+                        {row.contextLabel}
+                        {row.doneAt && ` · הושלם ${new Date(row.doneAt).toLocaleDateString('he-IL')}`}
+                      </div>
+                    </div>
+                    <button
+                      onClick={row.onUndo}
+                      title="בטל ביצוע"
+                      className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-[#9B7A2F] bg-[#FAF6EE] border border-[#EDE6D6] px-2.5 py-1.5 rounded-lg hover:bg-[#F5E7C4] transition-colors"
+                    >
+                      <RotateCcw size={12} /> בטל ביצוע
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {completedTasks.length > COMPLETED_TASKS_PAGE && (
+                <button
+                  onClick={() => setShowAllCompleted(v => !v)}
+                  className="w-full text-center text-[11px] font-bold text-[#9B7A2F] py-2 border-t border-[#EDE6D6] hover:bg-[#FAF6EE] transition-colors"
+                >
+                  {showAllCompleted ? 'הצג פחות' : `הצג הכל (${completedTasks.length})`}
+                </button>
+              )}
+            </>
+          )}
         </div>
 
         <div className="flex gap-1.5 mb-4">
