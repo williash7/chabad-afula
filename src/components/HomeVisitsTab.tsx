@@ -10,6 +10,7 @@ import { getCustomHols } from '../lib/api';
 import { STANDALONE_TASKS_ID, stampCreated } from '../lib/tasks';
 import { logAction } from '../lib/score';
 import { CompletionFollowUpModal } from './CompletionFollowUpModal';
+import { AIPlanningAssistant } from './AIPlanningAssistant';
 
 export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; count: number } }) {
   const {
@@ -415,6 +416,19 @@ function RoundCard({
             <button onClick={addPrepTask} className="bg-[#0D1B2A] text-[#E8C97A] rounded-md px-2 shrink-0"><Plus size={12} /></button>
           </div>
         </div>
+
+        <AIPlanningAssistant
+          title={round.purpose ? `ביקורי בית — ${round.purpose}` : 'מערך ביקורי בית'}
+          contextLines={[
+            `${round.entries.length} אנשי קשר במערך (${visited} כבר בוקרו)`,
+            ...(round.dateRangeStart ? [`טווח תאריכים: ${round.dateRangeStart}${round.dateRangeEnd ? ` עד ${round.dateRangeEnd}` : ''}`] : []),
+            ...(round.prepTasks?.length ? [`משימות הכנה שכבר קיימות: ${round.prepTasks.map(t => t.text).join(', ')}`] : []),
+          ]}
+          onApply={(result) => {
+            if (!result.tasks?.length) return;
+            onUpdateMeta({ prepTasks: [...(round.prepTasks || []), ...result.tasks.map(text => ({ text, done: false }))] });
+          }}
+        />
       </div>
 
       <div className="space-y-2">

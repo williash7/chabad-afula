@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Check, ClipboardList, Calendar, CalendarCheck, Cake, X, ChevronLeft, Plus, Clock, ListTodo, SlidersHorizontal } from 'lucide-react';
+import { Check, ClipboardList, Calendar, CalendarCheck, Cake, X, ChevronLeft, Plus, Clock, ListTodo, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
 import { HolidayModal } from './HolidayModal';
 import { TaskDetailsPanel } from './TaskDetailsPanel';
 import { TaskCalendarView } from './TaskCalendarView';
 import { QuickLogButtons } from './QuickLogButtons';
 import { CompletionFollowUpModal } from './CompletionFollowUpModal';
+import { AIPlanningAssistant } from './AIPlanningAssistant';
 import { computePersonalDateEvents } from '../lib/personalDates';
 import { inviteRemainingMinutes, toggleInvitePerson, STANDALONE_TASKS_ID, PERSONAL_DATE_EXTRAS_ID, nextEventOccurrence, formatRemaining, stampCreated } from '../lib/tasks';
 import { effectiveDate, compareTasks, priorityWeight, applyTaskTime, TaskSortKey } from '../lib/taskSort';
@@ -31,6 +32,16 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const [isControlsOpen, setIsControlsOpen] = useState(false);
   type CompletionTarget = { kind: 'standalone' } | { kind: 'holiday'; id: string } | { kind: 'event'; id: string } | { kind: 'personal'; key: string };
   const [completionPrompt, setCompletionPrompt] = useState<{ label: string; target: CompletionTarget } | null>(null);
+  // כיווץ קבוצות משימות (לפי חג/אירוע) בתצוגה "לפי קטגוריה" — פתוח כברירת
+  // מחדל, נשמר רק ב-state המקומי (לא בין רענונים) כדי לא לסבך את מודל הנתונים.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroupCollapse = (key: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   React.useEffect(() => {
     if (addTrigger?.tab === 'tasks' && addTrigger.count) setIsAddOpen(true);
@@ -653,28 +664,39 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
           ) : (
             <div className="space-y-4">
               {holidayGroups.map(g => {
+                const groupKey = `h-${g.id}`;
+                const collapsed = collapsedGroups.has(groupKey);
                 return (
                   <div key={g.id}>
-                    <button onClick={() => openHolidayFull(g.id)} className="flex items-center gap-1 text-xs font-bold text-[#9B7A2F] mb-1 hover:underline">
-                      {g.id} <ChevronLeft size={12} />
-                    </button>
-                    {g.contextDate && (
-                      <div className="text-[10px] text-gray-400 flex items-center gap-1 mb-2"><Clock size={10} /> {formatRemaining(g.contextDate, new Date())}</div>
-                    )}
-                    <div className="space-y-2">
-                      {g.tasks.map(({ t, idx }: any) => (
-                        <div key={idx}>
-                          {renderTaskItem(
-                            t,
-                            () => toggleHolidayTask(g.id, idx),
-                            () => deleteHolidayTask(g.id, idx),
-                            p => toggleHolidayInvitePerson(g.id, idx, p),
-                            patch => patchHolidayTask(g.id, idx, patch),
-                            holidayExtraFor(g.id, idx, t)
-                          )}
-                        </div>
-                      ))}
+                    <div className="flex items-center justify-between mb-1">
+                      <button onClick={() => openHolidayFull(g.id)} className="flex items-center gap-1 text-xs font-bold text-[#9B7A2F] hover:underline">
+                        {g.id} <ChevronLeft size={12} />
+                      </button>
+                      <button onClick={() => toggleGroupCollapse(groupKey)} className="flex items-center gap-1 text-[10px] text-gray-400 px-1.5 py-0.5 rounded hover:bg-[#FAF6EE] transition-colors">
+                        {g.tasks.length} משימות <ChevronDown size={12} className={`transition-transform ${collapsed ? '' : 'rotate-180'}`} />
+                      </button>
                     </div>
+                    {!collapsed && (
+                      <>
+                        {g.contextDate && (
+                          <div className="text-[10px] text-gray-400 flex items-center gap-1 mb-2"><Clock size={10} /> {formatRemaining(g.contextDate, new Date())}</div>
+                        )}
+                        <div className="space-y-2">
+                          {g.tasks.map(({ t, idx }: any) => (
+                            <div key={idx}>
+                              {renderTaskItem(
+                                t,
+                                () => toggleHolidayTask(g.id, idx),
+                                () => deleteHolidayTask(g.id, idx),
+                                p => toggleHolidayInvitePerson(g.id, idx, p),
+                                patch => patchHolidayTask(g.id, idx, patch),
+                                holidayExtraFor(g.id, idx, t)
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -694,21 +716,32 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
           ) : (
             <div className="space-y-4">
               {eventGroups.map(g => {
+                const groupKey = `e-${g.id}`;
+                const collapsed = collapsedGroups.has(groupKey);
                 return (
                   <div key={g.id}>
-                    <button onClick={() => setTab('events')} className="flex items-center gap-1 text-xs font-bold text-[#9B7A2F] mb-1 hover:underline">
-                      {g.name} <ChevronLeft size={12} />
-                    </button>
-                    {g.contextDate && (
-                      <div className="text-[10px] text-gray-400 flex items-center gap-1 mb-2"><Clock size={10} /> {formatRemaining(g.contextDate, new Date())} עד המפגש הבא</div>
-                    )}
-                    <div className="space-y-2">
-                      {g.tasks.map(({ t, idx }: any) => (
-                        <div key={idx}>
-                          {renderTaskItem(t, () => toggleEventTask(g.id, idx), () => deleteEventTask(g.id, idx), p => toggleEventInvitePerson(g.id, idx, p), patch => patchEventTask(g.id, idx, patch))}
-                        </div>
-                      ))}
+                    <div className="flex items-center justify-between mb-1">
+                      <button onClick={() => setTab('events')} className="flex items-center gap-1 text-xs font-bold text-[#9B7A2F] hover:underline">
+                        {g.name} <ChevronLeft size={12} />
+                      </button>
+                      <button onClick={() => toggleGroupCollapse(groupKey)} className="flex items-center gap-1 text-[10px] text-gray-400 px-1.5 py-0.5 rounded hover:bg-[#FAF6EE] transition-colors">
+                        {g.tasks.length} משימות <ChevronDown size={12} className={`transition-transform ${collapsed ? '' : 'rotate-180'}`} />
+                      </button>
                     </div>
+                    {!collapsed && (
+                      <>
+                        {g.contextDate && (
+                          <div className="text-[10px] text-gray-400 flex items-center gap-1 mb-2"><Clock size={10} /> {formatRemaining(g.contextDate, new Date())} עד המפגש הבא</div>
+                        )}
+                        <div className="space-y-2">
+                          {g.tasks.map(({ t, idx }: any) => (
+                            <div key={idx}>
+                              {renderTaskItem(t, () => toggleEventTask(g.id, idx), () => deleteEventTask(g.id, idx), p => toggleEventInvitePerson(g.id, idx, p), patch => patchEventTask(g.id, idx, patch))}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -769,6 +802,19 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
                 הוסף
               </button>
             </div>
+          </div>
+
+          <div className="mt-3">
+            <AIPlanningAssistant
+              title="משימות חד-פעמיות"
+              contextLines={standaloneTasks.length ? [`משימות פתוחות שכבר קיימות: ${standaloneTasks.map(({ t }: any) => t.text).join(', ')}`] : []}
+              onApply={(result) => {
+                if (!result.tasks?.length) return;
+                const newTasks = result.tasks.map(text => stampCreated({ text, done: false }));
+                updateHolidayExtras(STANDALONE_TASKS_ID, { tasks: [...allStandaloneTasks, ...newTasks] });
+                logAction('task_create', newTasks.length);
+              }}
+            />
           </div>
         </div>
       </div>
