@@ -55,6 +55,7 @@ interface AppState {
   archiveOccurrence: (params: { type: 'holiday' | 'event'; id: string; name: string; occurrenceDate?: string }) => void;
   importTasksFromHistory: (params: { type: 'holiday' | 'event'; id: string; name: string }) => boolean;
   updateHistoryEntry: (id: string, data: Partial<HistoryEntry>) => void;
+  deleteHistoryEntry: (id: string) => void;
   startHomeVisitRound: (entries: HomeVisitEntry[]) => void;
   markHomeVisitDone: (roundId: string, name: string) => void;
   createHomeVisitTaskForEntry: (roundId: string, name: string) => void;
@@ -396,6 +397,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // מוחק רשומת היסטוריה לצמיתות — לשימוש כשמשהו הועבר להיסטוריה בטעות.
+  // לא משחזר משימות/נוכחות חזרה למופע החי (זה כבר קיים בנפרד — "ייבוא משימות
+  // מההיסטוריה" בכרטיס החג/אירוע החי).
+  const deleteHistoryEntry = (id: string) => {
+    setHistory(prev => {
+      const next = prev.filter(h => h.id !== id);
+      saveHistoryDataCloud(next);
+      return next;
+    });
+  };
+
   // מסמן חג/אירוע כ"הסתיים": שומר תמונת מצב (משימות/נוכחות/תקציב) בהיסטוריה,
   // ומרוקן את המשימות (ואת הנוכחות) החיות כדי שהמופע הבא יתחיל נקי.
   // גם ממלא אוטומטית את שדה "אשתקד" עם המספרים האמיתיים שהתקבלו, לקראת השנה הבאה.
@@ -683,7 +695,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       loading, loadingText, apiError, crm, holidayExtras, eventsData, history, nameMerges, refresh: loadAll,
       addManualDonation, updateCrm, updateHolidayExtras, updateEventsData, updateRebbeDate,
       mergeContacts, unmergeContact, settings, updateSettings,
-      archiveOccurrence, importTasksFromHistory, updateHistoryEntry,
+      archiveOccurrence, importTasksFromHistory, updateHistoryEntry, deleteHistoryEntry,
       homeVisits, startHomeVisitRound, markHomeVisitDone, createHomeVisitTaskForEntry,
       updateHomeVisitEntry, reorderHomeVisitEntries, archiveHomeVisitRound, deleteHomeVisitRound,
       removeHomeVisitEntry, addHomeVisitEntries, updateHomeVisitRoundMeta,

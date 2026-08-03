@@ -96,28 +96,27 @@ export function formatRemaining(target: Date, now: Date): string {
 
 // שלוש משימות ברירת מחדל לכל אירוע: פרסום קידום לפני, צילום בזמן האירוע (בשעת
 // מעשה), ופרסום סיכום אחרי — צילום ופרסום הן שתי משימות נפרדות, לא אחת משולבת.
-export function createEventMediaTasks(): TaskItem[] {
+// dueDate אופציונלי (תאריך המפגש הקרוב של האירוע) מוצמד לשלושתן.
+export function createEventMediaTasks(dueDate?: string): TaskItem[] {
   return [
-    stampCreated({ text: '📢 פרסום קידום לפני האירוע (סטטוס + פייסבוק)', done: false }),
-    stampCreated({ text: '📷 צילום בזמן האירוע', done: false }),
-    stampCreated({ text: '📸 פרסום סיכום אחרי האירוע (סטטוס + פייסבוק)', done: false }),
+    stampCreated({ text: '📢 פרסום קידום לפני האירוע (סטטוס + פייסבוק)', done: false, ...(dueDate ? { dueDate } : {}) }),
+    stampCreated({ text: '📷 צילום בזמן האירוע', done: false, ...(dueDate ? { dueDate } : {}) }),
+    stampCreated({ text: '📸 פרסום סיכום אחרי האירוע (סטטוס + פייסבוק)', done: false, ...(dueDate ? { dueDate } : {}) }),
   ];
 }
 
-// גיבוי חד-פעמי: ממלא dueDate לכל משימת אירוע קיימת שעדיין אין לה תאריך משלה,
-// לפי המופע הקרוב הבא של האירוע כרגע — כדי שגם משימות ישנות (מלפני שמשימות
-// אירוע חדשות התחילו לקבל תאריך אוטומטית) יקבלו את תאריך האירוע בפועל, לא
-// רק חדשות. לא נוגע במשימות "מדיה" (קידום/צילום/סיכום) — אלה מכוונות במפורש
-// לפני/בזמן/אחרי האירוע, לא לאותו תאריך בדיוק.
+// גיבוי חד-פעמי: ממלא dueDate לכל משימת אירוע קיימת שעדיין אין לה תאריך משלה
+// (כולל משימות מדיה — קידום/צילום/סיכום), לפי המופע הקרוב הבא של האירוע כרגע
+// — כדי שגם משימות ישנות (מלפני שמשימות אירוע חדשות התחילו לקבל תאריך
+// אוטומטית) יקבלו את תאריך האירוע בפועל, לא רק חדשות.
 export function backfillEventTaskDates(events: any[], today: Date): { events: any[]; count: number } {
-  const mediaTexts = new Set(createEventMediaTasks().map(t => t.text));
   let count = 0;
   const next = events.map(ev => {
     const occ = nextEventOccurrence(ev, today);
     if (!occ) return ev;
     const occIso = occ.toISOString().split('T')[0];
     const tasks = (ev.tasks || []).map((t: any) => {
-      if (t.dueDate || mediaTexts.has(t.text)) return t;
+      if (t.dueDate) return t;
       count++;
       return { ...t, dueDate: occIso };
     });

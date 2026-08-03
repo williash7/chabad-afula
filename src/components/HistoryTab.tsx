@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { History, Users, Wallet, ChevronDown, Lightbulb, X, Plus } from 'lucide-react';
+import { History, Users, Wallet, ChevronDown, Lightbulb, X, Plus, Trash2 } from 'lucide-react';
 import { countAttendance, sumBudget, HistoryEntry } from '../lib/history';
 
 export function HistoryTab() {
-  const { history, updateHistoryEntry, visibleDonors } = useAppStore();
+  const { history, updateHistoryEntry, deleteHistoryEntry, visibleDonors } = useAppStore();
   const [filter, setFilter] = useState<'all' | 'holiday' | 'event'>('all');
   const [openId, setOpenId] = useState<string | null>(null);
   const [forms, setForms] = useState<Record<string, { good: string; improve: string; plan: string }>>({});
@@ -118,30 +118,39 @@ export function HistoryTab() {
               const form = getForm(h);
               return (
                 <div key={h.id} className="bg-white rounded-xl border border-[#EDE6D6] shadow-sm overflow-hidden">
-                  <button onClick={() => setOpenId(isOpen ? null : h.id)} className="w-full flex items-center justify-between p-3.5 text-right">
-                    <div className="min-w-0">
-                      <div className="font-bold text-[#0D1B2A] text-sm flex items-center gap-2">
-                        <span>{h.type === 'holiday' ? '✡️' : '📌'}</span>
-                        {h.name}
+                  <div className="w-full flex items-center gap-1">
+                    <button onClick={() => setOpenId(isOpen ? null : h.id)} className="flex-1 min-w-0 flex items-center justify-between p-3.5 text-right">
+                      <div className="min-w-0">
+                        <div className="font-bold text-[#0D1B2A] text-sm flex items-center gap-2">
+                          <span>{h.type === 'holiday' ? '✡️' : '📌'}</span>
+                          {h.name}
+                        </div>
+                        <div className="text-[11px] text-gray-400 mt-0.5">
+                          הועבר להיסטוריה ב-{new Date(h.archivedAt).toLocaleDateString('he-IL')}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          <span className="bg-[#D1FAE5] text-[#065F46] px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1"><Users size={10} /> {attCount} נכחו</span>
+                          {(budget.actualIncome > 0 || budget.plannedIncome > 0) && (
+                            <span className="bg-[#FEF3C7] text-[#92400E] px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1"><Wallet size={10} /> הכנסות: ₪{(budget.actualIncome || budget.plannedIncome).toLocaleString()}</span>
+                          )}
+                          {(budget.actualExpense > 0 || budget.plannedExpense > 0) && (
+                            <span className="bg-red-50 text-red-700 px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1">הוצאות: ₪{(budget.actualExpense || budget.plannedExpense).toLocaleString()}</span>
+                          )}
+                          {(h.tasks || []).length > 0 && (
+                            <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md text-[10px] font-bold">📋 {(h.tasks || []).filter((t: any) => t.done).length}/{(h.tasks || []).length} משימות</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-[11px] text-gray-400 mt-0.5">
-                        הועבר להיסטוריה ב-{new Date(h.archivedAt).toLocaleDateString('he-IL')}
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        <span className="bg-[#D1FAE5] text-[#065F46] px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1"><Users size={10} /> {attCount} נכחו</span>
-                        {(budget.actualIncome > 0 || budget.plannedIncome > 0) && (
-                          <span className="bg-[#FEF3C7] text-[#92400E] px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1"><Wallet size={10} /> הכנסות: ₪{(budget.actualIncome || budget.plannedIncome).toLocaleString()}</span>
-                        )}
-                        {(budget.actualExpense > 0 || budget.plannedExpense > 0) && (
-                          <span className="bg-red-50 text-red-700 px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1">הוצאות: ₪{(budget.actualExpense || budget.plannedExpense).toLocaleString()}</span>
-                        )}
-                        {(h.tasks || []).length > 0 && (
-                          <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md text-[10px] font-bold">📋 {(h.tasks || []).filter((t: any) => t.done).length}/{(h.tasks || []).length} משימות</span>
-                        )}
-                      </div>
-                    </div>
-                    <ChevronDown size={16} className={`text-gray-300 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                  </button>
+                      <ChevronDown size={16} className={`text-gray-300 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    <button
+                      onClick={() => { if (window.confirm(`למחוק את "${h.name}" מההיסטוריה לצמיתות? (למשל אם הועבר לכאן בטעות)`)) deleteHistoryEntry(h.id); }}
+                      title="מחק מההיסטוריה"
+                      className="shrink-0 p-2 mr-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
 
                   {isOpen && (
                     <div className="border-t border-[#EDE6D6] p-3.5 bg-[#FAF6EE]">

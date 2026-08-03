@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Plus, Check, X, ClipboardList, Trash2, Pencil, Clock, Archive } from 'lucide-react';
+import { Plus, Check, X, ClipboardList, Trash2, Pencil, Clock, Archive, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { createInviteTask, toggleInvitePerson, inviteRemainingMinutes, MINUTES_PER_CALL, nextEventOccurrence, formatRemaining, createEventMediaTasks, stampCreated } from '../lib/tasks';
 import { logAction } from '../lib/score';
@@ -22,6 +22,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
   const [taskDate, setTaskDate] = useState('');
   const [taskTime, setTaskTime] = useState('');
   const [completionPrompt, setCompletionPrompt] = useState<{ label: string; eventId: string } | null>(null);
+  const [attListOpenId, setAttListOpenId] = useState<string | null>(null);
 
   const [evName, setEvName] = useState('');
   const [evType, setEvType] = useState('shabbat');
@@ -85,6 +86,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
       } : e));
       logAction('event_edit');
     } else {
+      const occ = nextEventOccurrence({ date: evDate, freq: evFreq, time: evTime }, new Date());
       const newEv = {
         id: `ev_${Date.now()}`,
         name: evName.trim(),
@@ -93,7 +95,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
         date: evDate,
         time: evTime,
         attendance: {},
-        tasks: createEventMediaTasks(),
+        tasks: createEventMediaTasks(occ ? occ.toISOString().split('T')[0] : undefined),
       };
       updateEventsData([...eventsData, newEv]);
       logAction('event_create');
@@ -113,6 +115,16 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
     const iso = new Date().toISOString().split('T')[0];
     setAttDateISO(iso);
     const dateKey = format(new Date(iso), 'dd/MM/yyyy');
+    setPendingAtt({ ...(ev.attendance?.[dateKey] || {}) });
+    setAttEventId(ev.id);
+    setAttSearch('');
+  };
+
+  // פותח את מודל הנוכחות ישירות על תאריך קיים לעריכה (במקום תמיד היום) —
+  // לשימוש מרשימת "כל המפגשים" בכרטיס האירוע.
+  const openAttModalForDate = (ev: any, dateKey: string) => {
+    const [d, m, y] = dateKey.split('/');
+    setAttDateISO(`${y}-${m}-${d}`);
     setPendingAtt({ ...(ev.attendance?.[dateKey] || {}) });
     setAttEventId(ev.id);
     setAttSearch('');
@@ -242,7 +254,8 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
 
   const addEventMediaTasks = () => {
     if (!currentTasksEvent || hasMediaTasks(currentTasksEvent)) return;
-    const newTasks = createEventMediaTasks();
+    const occ = nextEventOccurrence(currentTasksEvent, new Date());
+    const newTasks = createEventMediaTasks(occ ? occ.toISOString().split('T')[0] : undefined);
     const nextTasks = [...(currentTasksEvent.tasks || []), ...newTasks];
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
     logAction('task_create', newTasks.length);
@@ -369,6 +382,35 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
                      <div className="flex flex-wrap gap-1.5">
                        {lastNames.map((n, i) => <span key={i} className="bg-[#0D1B2A] text-[#E8C97A] text-[10px] font-bold px-2.5 py-0.5 rounded-full">{n}</span>)}
                      </div>
+                   </div>
+                 )}
+
+                 {attDates.length > 0 && (
+                   <div className="border-t border-[#EDE6D6]">
+                     <button
+                       onClick={() => setAttListOpenId(attListOpenId === ev.id ? null : ev.id)}
+                       className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-bold text-[#9B7A2F]"
+                     >
+                       <span>כל המפגשים ({attDates.length}) — לעריכת נוכחות</span>
+                       <ChevronDown size={13} className={`transition-transform ${attListOpenId === ev.id ? 'rotate-180' : ''}`} />
+                     </button>
+                     {attListOpenId === ev.id && (
+                       <div className="divide-y divide-[#EDE6D6] border-t border-[#EDE6D6]">
+                         {attDates.map(dateKey => {
+                           const count = Object.values(ev.attendance[dateKey]).filter(Boolean).length;
+                           return (
+                             <button
+                               key={dateKey}
+                               onClick={() => openAttModalForDate(ev, dateKey)}
+                               className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-[#FAF6EE] transition-colors"
+                             >
+                               <span className="text-[#0D1B2A]"><span className="font-bold">{count}</span> נוכחים</span>
+                               <span className="flex items-center gap-1.5 text-[#9B7A2F] font-medium">{dateKey} <Pencil size={11} /></span>
+                             </button>
+                           );
+                         })}
+                       </div>
+                     )}
                    </div>
                  )}
               </div>

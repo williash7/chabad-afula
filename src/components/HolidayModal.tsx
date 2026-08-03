@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { createHolidayDoc } from '../lib/api';
-import { X, Check, MessageSquare, FileText, ExternalLink, Loader2, Download, ClipboardList } from 'lucide-react';
+import { X, Check, MessageSquare, FileText, ExternalLink, Loader2, Download, ClipboardList, Pencil } from 'lucide-react';
 import { createInviteTask, inviteRemainingMinutes, toggleInvitePerson, MINUTES_PER_CALL, stampCreated } from '../lib/tasks';
 import { logAction } from '../lib/score';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
@@ -204,6 +204,16 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
     setIsAttOpen(true);
   };
 
+  // פותח את מודל הנוכחות ישירות על תאריך קיים לעריכה (במקום תמיד היום) —
+  // לשימוש מרשימת "כל המפגשים" למטה.
+  const openAttModalForDate = (dateKey: string) => {
+    const [d, m, y] = dateKey.split('/');
+    setAttDateISO(`${y}-${m}-${d}`);
+    setPendingAtt({ ...(extra.attendance?.[dateKey] || {}) });
+    setAttSearch('');
+    setIsAttOpen(true);
+  };
+
   const changeAttDate = (iso: string) => {
     setAttDateISO(iso);
     const dateKey = new Date(iso).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -251,8 +261,6 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
     const [d2, m2, y2] = b.split('/');
     return new Date(`${y2}-${m2}-${d2}`).getTime() - new Date(`${y1}-${m1}-${d1}`).getTime();
   });
-  const lastAttDate = lastAttDates[0];
-  const lastAttCount = lastAttDate ? Object.values(extra.attendance[lastAttDate]).filter(Boolean).length : 0;
 
   const handleExportReport = () => {
     const dateLabel = hDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -727,13 +735,25 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
               <Check size={14}/> סמן נוכחות
             </button>
           </div>
-          <div className="bg-white rounded-xl shadow-sm p-4 border border-[#EDE6D6]">
-            {lastAttDate ? (
-              <div className="text-sm text-[#0D1B2A]">
-                <span className="font-bold">{lastAttCount}</span> נוכחים נרשמו לתאריך <span className="font-bold">{lastAttDate}</span>
-              </div>
+          <div className="bg-white rounded-xl shadow-sm border border-[#EDE6D6] overflow-hidden">
+            {lastAttDates.length === 0 ? (
+              <div className="text-sm text-gray-400 text-center py-4">עדיין לא נרשמה נוכחות לחג זה</div>
             ) : (
-              <div className="text-sm text-gray-400 text-center py-1">עדיין לא נרשמה נוכחות לחג זה</div>
+              <div className="divide-y divide-[#EDE6D6]">
+                {lastAttDates.map(dateKey => {
+                  const count = Object.values(extra.attendance[dateKey]).filter(Boolean).length;
+                  return (
+                    <button
+                      key={dateKey}
+                      onClick={() => openAttModalForDate(dateKey)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-[#FAF6EE] transition-colors"
+                    >
+                      <span className="text-[#0D1B2A]"><span className="font-bold">{count}</span> נוכחים</span>
+                      <span className="flex items-center gap-1.5 text-[#9B7A2F] font-medium">{dateKey} <Pencil size={11} /></span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
