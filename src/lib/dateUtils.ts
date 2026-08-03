@@ -35,3 +35,13 @@ export function parseDdMmYyyy(dateStr?: string | null): Date | null {
   const dt = new Date(s);
   return isNaN(dt.getTime()) ? null : dt;
 }
+
+// מזיז תאריך שחל בשבת (getDay()===6) ליום שישי שלפניו. מיועד רק לתאריכים
+// שהאפליקציה עצמה מחשבת (הצעות ברירת מחדל, תזכורות אוטומטיות) — לא לתאריך
+// שהמשתמש הקליד ידנית, כדי לא "לתקן" בחירה מכוונת שלו בלי לשאול.
+export function shiftShabbatToFriday(date: Date): Date {
+  if (date.getDay() !== 6) return date;
+  const d = new Date(date);
+  d.setDate(d.getDate() - 1);
+  return d;
+}

@@ -8,6 +8,7 @@ import { AIPlanningAssistant } from './AIPlanningAssistant';
 import { TaskDetailsPanel } from './TaskDetailsPanel';
 import { findLatestHistoryFor } from '../lib/history';
 import { Archive } from 'lucide-react';
+import { CompletionFollowUpModal } from './CompletionFollowUpModal';
 
 export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () => void }) {
   const { holidayExtras, updateHolidayExtras, visibleDonors, crm, hk, failures, refresh, history, archiveOccurrence, importTasksFromHistory } = useAppStore();
@@ -25,6 +26,7 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
   const [addTaskTime, setAddTaskTime] = useState('');
   const [isCreatingDoc, setIsCreatingDoc] = useState(false);
   const [docError, setDocError] = useState<string | null>(null);
+  const [completionPrompt, setCompletionPrompt] = useState<string | null>(null);
 
   // נוכחות בחג — אותה טכניקה כמו נוכחות באירועים (EventsTab), נשמר בתוך
   // holidayExtras[id].attendance לפי תאריך.
@@ -138,7 +140,10 @@ export function HolidayModal({ holiday, onClose }: { holiday: any, onClose: () =
     const wasDone = nextTasks[idx].done;
     nextTasks[idx].done = !nextTasks[idx].done;
     updateHolidayExtras(id, { tasks: nextTasks });
-    if (!wasDone) logAction('task_complete');
+    if (!wasDone) {
+      logAction('task_complete');
+      setCompletionPrompt(nextTasks[idx].text);
+    }
   };
 
   const addTask = () => {
@@ -1080,6 +1085,20 @@ ${docs.length > 0 ? section('📄 מסמכים מקושרים',
             </button>
           </div>
         </div>
+      )}
+
+      {completionPrompt && (
+        <CompletionFollowUpModal
+          sourceLabel={completionPrompt}
+          onSkip={() => setCompletionPrompt(null)}
+          onCreateFollowUp={(text, dueDate) => {
+            const newTask: any = stampCreated({ text, done: false });
+            if (dueDate) newTask.dueDate = dueDate;
+            updateHolidayExtras(id, { tasks: [...(extra.tasks || []), newTask] });
+            logAction('task_create');
+            setCompletionPrompt(null);
+          }}
+        />
       )}
     </div>
   );

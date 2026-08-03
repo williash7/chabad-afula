@@ -132,7 +132,7 @@ export function SettingsTab() {
           <div>
             <h3 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A]">טווח תאריכים לסכומי תרומות</h3>
             <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">
-              קובע מאיזה תאריך סופרים תרומות בכל הסכומים המוצגים באפליקציה — בדשבורד ("סה"כ תרומות"), אצל אנשי הקשר (כמה כל אחד תרם) ובדוחות. השארה ריקה = כל הזמנים.
+              קובע מאיזה תאריך סופרים תרומות בכל הסכומים המוצגים באפליקציה — בדשבורד ("תרומות מתחילת שנה"), אצל אנשי הקשר (כמה כל אחד תרם) ובדוחות. השארה ריקה = מתחילת השנה הנוכחית.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -147,15 +147,43 @@ export function SettingsTab() {
                 onClick={() => updateSettings({ donationsSinceDate: '' })}
                 className="shrink-0 px-3 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-200 transition-colors"
               >
-                נקה (כל הזמנים)
+                נקה (מתחילת השנה)
               </button>
             )}
           </div>
-          {settings.donationsSinceDate && (
+          {settings.donationsSinceDate ? (
             <div className="text-[11px] text-[#9B7A2F] font-semibold">
               ✓ כרגע מוצגות תרומות מ-{new Date(settings.donationsSinceDate).toLocaleDateString('he-IL')} ואילך בלבד
             </div>
+          ) : (
+            <div className="text-[11px] text-[#9B7A2F] font-semibold">
+              ✓ כרגע מוצגות תרומות מתחילת {new Date().getFullYear()} ואילך (ברירת מחדל)
+            </div>
           )}
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#EDE6D6] space-y-3">
+          <div>
+            <h3 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A]">תצוגת ברירת מחדל למשימות</h3>
+            <p className="text-[11px] text-gray-400 mt-0.5">איזו תצוגה נפתחת כשנכנסים לטאב "משימות"</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { key: 'grouped', label: '📁 לפי קטגוריה' },
+              { key: 'flat', label: '📋 רשימה אחת' },
+              { key: 'calendar', label: '📆 לוח שנה' },
+            ] as const).map(o => (
+              <button
+                key={o.key}
+                onClick={() => updateSettings({ defaultTaskView: o.key })}
+                className={`p-2.5 rounded-xl border-2 text-center text-xs font-semibold transition-colors ${
+                  settings.defaultTaskView === o.key ? 'bg-[#D1FAE5] border-[#10B981] text-[#0D1B2A]' : 'bg-white border-[#EDE6D6] text-gray-400'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#EDE6D6] space-y-4">

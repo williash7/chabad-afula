@@ -17,7 +17,6 @@ import { DonationsTab } from './components/DonationsTab';
 import { HistoryTab } from './components/HistoryTab';
 import { DonationModal } from './components/DonationModal';
 import { ProfileModal } from './components/ProfileModal';
-import { Plus } from 'lucide-react';
 
 // תווית לכפתור "+" הגלובלי (FAB במובייל, "הוסף X" בסיידבר) לפי המסך הפעיל.
 // מסכים שלא ברשימה (דוחות, פוסטר, הגדרות) — אין פעולת "הוספה" משמעותית, הכפתור מוסתר בהם.
@@ -45,6 +44,15 @@ function AppContent() {
     setAddTrigger({ tab: activeTab, count: Date.now() });
   };
 
+  // כמו requestAdd אבל לטאב נתון בלי קשר לטאב הפעיל כרגע — לשימוש בכפתורי
+  // "פעולות מהירות" בדשבורד, שצריכים לנווט לטאב היעד ולפתוח את מודל ההוספה
+  // שלו בפעולה אחת.
+  const requestAddFor = (tab: string) => {
+    if (tab === 'home') { setIsDonationOpen(true); return; }
+    setActiveTab(tab);
+    setAddTrigger({ tab, count: Date.now() });
+  };
+
   if (loading) {
     return <LoadingScreen text={loadingText} />;
   }
@@ -64,7 +72,7 @@ function AppContent() {
         <SideNav currentTab={activeTab} setTab={setActiveTab} onDonationClick={requestAdd} addLabel={ADD_LABELS[activeTab]} />
 
         <main className="flex-1 min-w-0 pb-20 md:pb-6">
-          {activeTab === 'home' && <HomeTab setTab={setActiveTab} onDonationClick={() => setIsDonationOpen(true)} />}
+          {activeTab === 'home' && <HomeTab setTab={setActiveTab} onDonationClick={() => setIsDonationOpen(true)} onQuickAdd={requestAddFor} />}
           {activeTab === 'donors' && <DonorsTab addTrigger={addTrigger} />}
           {activeTab === 'homevisits' && <HomeVisitsTab addTrigger={addTrigger} />}
           {activeTab === 'donations' && <DonationsTab />}
@@ -81,17 +89,6 @@ function AppContent() {
 
       {/* Mobile bottom nav */}
       <BottomNav currentTab={activeTab} setTab={setActiveTab} />
-
-      {/* Mobile FAB */}
-      {activeTab in ADD_LABELS && (
-        <button
-          onClick={requestAdd}
-          title={`הוסף ${ADD_LABELS[activeTab]}`}
-          className="fixed bottom-[82px] left-1/2 -translate-x-[180px] w-[52px] h-[52px] bg-gradient-to-br from-[#C9A84C] to-[#9B7A2F] rounded-full flex items-center justify-center text-white shadow-lg z-40 active:scale-95 transition-transform md:hidden"
-        >
-          <Plus size={24} />
-        </button>
-      )}
 
       {isDonationOpen && <DonationModal onClose={() => setIsDonationOpen(false)} />}
       {scoreOpenContact && <ProfileModal name={scoreOpenContact} onClose={() => setScoreOpenContact(null)} />}

@@ -113,7 +113,7 @@ export function ReportsTab() {
         {/* Summary KPIs — always 4-column row on desktop */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 md:mb-6">
           {([
-            { emoji: '💰', label: settings.donationsSinceDate ? `סה"כ מ-${new Date(settings.donationsSinceDate).toLocaleDateString('he-IL')}` : 'סה"כ תרומות', value: `₪${(effectiveSummary?.total || 0).toLocaleString()}` },
+            { emoji: '💰', label: settings.donationsSinceDate ? `סה"כ מ-${new Date(settings.donationsSinceDate).toLocaleDateString('he-IL')}` : 'סה"כ מתחילת שנה', value: `₪${(effectiveSummary?.total || 0).toLocaleString()}` },
             { emoji: '📅', label: 'החודש', value: `₪${(effectiveSummary?.thisMonthTotal || 0).toLocaleString()}` },
             { emoji: '👥', label: 'תורמים', value: String(effectiveSummary?.donorCount || 0) },
             { emoji: '🔄', label: 'הוראות קבע', value: String(summary.hkActive || 0), onClick: () => setIsHkOpen(true) },

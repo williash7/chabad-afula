@@ -14,6 +14,7 @@ export interface AppSettings {
   fbAccessToken: string; // טוקן גישה לדף
   hkExpiringThreshold: number; // כמה חיובים נותרו כדי לסמן הוראת קבע כ"מסתיימת בקרוב"
   donationsSinceDate: string; // ISO "yyyy-MM-dd" — מציגים סכומי תרומות רק מתאריך זה ואילך. '' = כל הזמנים.
+  defaultTaskView: 'grouped' | 'flat' | 'calendar'; // תצוגת ברירת המחדל שנפתחת בטאב משימות
 }
 
 export const ALL_CIRCLES = ['close', 'approach', 'third', 'far', 'none'];
@@ -36,6 +37,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fbAccessToken: '',
   hkExpiringThreshold: 2,
   donationsSinceDate: '',
+  defaultTaskView: 'grouped',
 };
 
 const STORAGE_KEY = 'app_settings_v1';

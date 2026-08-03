@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Check, ClipboardList, Calendar, CalendarCheck, Cake, X, ChevronLeft, Plus, Clock, ListTodo } from 'lucide-react';
+import { Check, ClipboardList, Calendar, CalendarCheck, Cake, X, ChevronLeft, Plus, Clock, ListTodo, SlidersHorizontal } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
 import { HolidayModal } from './HolidayModal';
 import { TaskDetailsPanel } from './TaskDetailsPanel';
 import { TaskCalendarView } from './TaskCalendarView';
 import { QuickLogButtons } from './QuickLogButtons';
+import { CompletionFollowUpModal } from './CompletionFollowUpModal';
 import { computePersonalDateEvents } from '../lib/personalDates';
 import { inviteRemainingMinutes, toggleInvitePerson, STANDALONE_TASKS_ID, PERSONAL_DATE_EXTRAS_ID, nextEventOccurrence, formatRemaining, stampCreated } from '../lib/tasks';
 import { effectiveDate, compareTasks, priorityWeight, applyTaskTime, TaskSortKey } from '../lib/taskSort';
@@ -13,7 +14,7 @@ import { getCustomHols } from '../lib/api';
 import { logAction } from '../lib/score';
 
 export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; addTrigger?: { tab: string; count: number } }) {
-  const { holidayExtras, updateHolidayExtras, eventsData, updateEventsData, visibleDonors, crm, holidays, markHomeVisitDone } = useAppStore();
+  const { holidayExtras, updateHolidayExtras, eventsData, updateEventsData, visibleDonors, crm, holidays, markHomeVisitDone, settings } = useAppStore();
   const [selectedDonor, setSelectedDonor] = useState<string | null>(null);
   const [selectedHoliday, setSelectedHoliday] = useState<any | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -25,8 +26,11 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const [standaloneDue, setStandaloneDue] = useState('');
   const [standaloneTime, setStandaloneTime] = useState('');
   const [sortKey, setSortKey] = useState<TaskSortKey>('date');
-  const [viewMode, setViewMode] = useState<'grouped' | 'flat' | 'calendar'>('grouped');
+  const [viewMode, setViewMode] = useState<'grouped' | 'flat' | 'calendar'>(settings.defaultTaskView);
   const [calendarSelectedKey, setCalendarSelectedKey] = useState<string | null>(null);
+  const [isControlsOpen, setIsControlsOpen] = useState(false);
+  type CompletionTarget = { kind: 'standalone' } | { kind: 'holiday'; id: string } | { kind: 'event'; id: string } | { kind: 'personal'; key: string };
+  const [completionPrompt, setCompletionPrompt] = useState<{ label: string; target: CompletionTarget } | null>(null);
 
   React.useEffect(() => {
     if (addTrigger?.tab === 'tasks' && addTrigger.count) setIsAddOpen(true);
@@ -35,18 +39,34 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const personalDates = React.useMemo(
-    () => computePersonalDateEvents(visibleDonors, crm, today).filter(e => e.dist <= 30),
-    [visibleDonors, crm]
-  );
-
   // פרטים נוספים (שעה/מקום/הערות/תתי-משימות/דחיפות) לתזכורות תאריכים אישיים —
   // keyed לפי PersonalDateEvent.key היציב, נשמר באותה טכניקת piggyback כמו
-  // STANDALONE_TASKS_ID.
+  // STANDALONE_TASKS_ID. dismissedFor (ISO של המופע שסומן "טופל") משמש
+  // להעלים תזכורת מהרשימה עד המופע הבא (שנה הבאה), בלי לאבד את ה"פרטים
+  // נוספים" הקיימים שלה.
   const personalDateExtras: Record<string, any> = holidayExtras[PERSONAL_DATE_EXTRAS_ID] || {};
   const patchPersonalDate = (key: string, patch: Partial<any>) => {
     updateHolidayExtras(PERSONAL_DATE_EXTRAS_ID, { [key]: { ...(personalDateExtras[key] || {}), ...patch } });
   };
+
+  // "סוגר" תזכורת תאריך אישי למופע הנוכחי (dismissedFor) ופותח את דיאלוג
+  // משימת ההמשך — ראה QuickLogButtons.personalDateContext.
+  const dismissPersonalDate = (c: { key: string; name: string; msg: string; dist: number }) => {
+    const occurrenceIso = new Date(today.getTime() + c.dist * 86400000).toISOString().split('T')[0];
+    patchPersonalDate(c.key, { dismissedFor: occurrenceIso });
+    setCompletionPrompt({ label: `${c.name} — ${c.msg}`, target: { kind: 'personal', key: c.key } });
+  };
+
+  const personalDates = React.useMemo(() => {
+    const all = computePersonalDateEvents(visibleDonors, crm, today).filter(e => e.dist <= 30);
+    return all.filter(e => {
+      const dismissedFor = personalDateExtras[e.key]?.dismissedFor;
+      if (!dismissedFor) return true;
+      const occurrenceIso = new Date(today.getTime() + e.dist * 86400000).toISOString().split('T')[0];
+      return dismissedFor !== occurrenceIso;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleDonors, crm, personalDateExtras]);
   const sortedPersonalDates = sortKey === 'priority'
     ? [...personalDates].sort((a, b) => priorityWeight(personalDateExtras[a.key] || {}) - priorityWeight(personalDateExtras[b.key] || {}))
     : personalDates;
@@ -125,7 +145,18 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     const tasks = [...allStandaloneTasks];
     tasks[idx] = { ...tasks[idx], done: !tasks[idx].done };
     updateHolidayExtras(STANDALONE_TASKS_ID, { tasks });
-    if (!wasDone) logAction('task_complete');
+    if (!wasDone) {
+      logAction('task_complete');
+      setCompletionPrompt({ label: tasks[idx].text, target: { kind: 'standalone' } });
+    }
+  };
+
+  // markHomeVisitDone (מ-AppContext) הוא כפתור "פעולה" חד-כיווני (לא checkbox
+  // הפיך כמו שאר המשימות) — כל קריאה אליו היא תמיד "הושלם", לכן פותח את
+  // דיאלוג משימת ההמשך בלי בדיקת wasDone.
+  const handleMarkHomeVisitDone = (roundId: string, personName: string, label: string) => {
+    markHomeVisitDone(roundId, personName);
+    setCompletionPrompt({ label, target: { kind: 'standalone' } });
   };
 
   const deleteStandaloneTask = (idx: number) => {
@@ -170,7 +201,10 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     const wasDone = tasks[idx]?.done;
     tasks[idx] = { ...tasks[idx], done: !tasks[idx].done };
     updateHolidayExtras(holidayId, { tasks });
-    if (!wasDone) logAction('task_complete');
+    if (!wasDone) {
+      logAction('task_complete');
+      setCompletionPrompt({ label: tasks[idx].text, target: { kind: 'holiday', id: holidayId } });
+    }
   };
 
   const deleteHolidayTask = (holidayId: string, idx: number) => {
@@ -205,13 +239,17 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const toggleEventTask = (eventId: string, idx: number) => {
     const ev = (eventsData as any[]).find((e: any) => e.id === eventId);
     const wasDone = ev?.tasks?.[idx]?.done;
+    const label = ev?.tasks?.[idx]?.text;
     updateEventsData((eventsData as any[]).map((e: any) => {
       if (e.id !== eventId) return e;
       const tasks = [...(e.tasks || [])];
       tasks[idx] = { ...tasks[idx], done: !tasks[idx].done };
       return { ...e, tasks };
     }));
-    if (!wasDone) logAction('task_complete');
+    if (!wasDone) {
+      logAction('task_complete');
+      setCompletionPrompt({ label, target: { kind: 'event', id: eventId } });
+    }
   };
 
   const deleteEventTask = (eventId: string, idx: number) => {
@@ -353,7 +391,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
               <div className="text-xs text-gray-600 mt-0.5">{c.msg}</div>
             </div>
           </div>
-          <QuickLogButtons donorName={c.name} compact />
+          <QuickLogButtons donorName={c.name} compact personalDateContext={{ onComplete: () => dismissPersonalDate(c) }} />
           <TaskDetailsPanel task={syntheticTask} onPatch={patch => patchPersonalDate(c.key, patch)} />
         </div>
       ),
@@ -406,7 +444,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
           <div className="text-[10px] text-[#9B7A2F] font-bold mb-1">📌 חד-פעמית</div>
           {renderTaskItem(
             t,
-            t.kind === 'homeVisit' ? () => markHomeVisitDone(t.roundId, t.personName) : () => toggleStandaloneTask(idx),
+            t.kind === 'homeVisit' ? () => handleMarkHomeVisitDone(t.roundId, t.personName, t.text) : () => toggleStandaloneTask(idx),
             () => deleteStandaloneTask(idx),
             p => toggleStandaloneInvitePerson(idx, p),
             patch => patchStandaloneTask(idx, patch),
@@ -424,6 +462,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   // כדי שמשימות בלי תאריך אמיתי יופיעו במגירת "ללא תאריך" ולא "יתפסו" תא אקראי.
   interface CalItem {
     key: string; date: Date | null; label: string; done: boolean; t: any;
+    source: 'personal' | 'holiday' | 'event' | 'standalone';
     onToggle: () => void; onDelete: () => void; onTogglePerson: (p: string) => void; onPatch: (patch: any) => void; extra?: React.ReactNode;
     customCard?: React.ReactNode;
   }
@@ -434,7 +473,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     const syntheticTask: any = { text: c.msg, done: false, ...extra };
     const date = new Date(today.getTime() + c.dist * 86400000);
     calendarItems.push({
-      key: `pd-${c.key}`, date, label: `${c.icon} ${c.name}`, done: false, t: syntheticTask,
+      key: `pd-${c.key}`, date, label: `${c.icon} ${c.name}`, done: false, t: syntheticTask, source: 'personal',
       onToggle: () => {}, onDelete: () => {}, onTogglePerson: () => {}, onPatch: patch => patchPersonalDate(c.key, patch),
       customCard: (
         <div className="bg-white border border-[#EDE6D6] rounded-xl p-3 shadow-sm">
@@ -445,7 +484,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
               <div className="text-xs text-gray-600 mt-0.5">{c.msg}</div>
             </div>
           </div>
-          <QuickLogButtons donorName={c.name} compact />
+          <QuickLogButtons donorName={c.name} compact personalDateContext={{ onComplete: () => dismissPersonalDate(c) }} />
           <TaskDetailsPanel task={syntheticTask} onPatch={patch => patchPersonalDate(c.key, patch)} />
         </div>
       ),
@@ -455,7 +494,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   holidayGroups.forEach(g => {
     g.tasks.forEach(({ t, idx }: any) => {
       calendarItems.push({
-        key: `h-${g.id}-${idx}`, date: g.contextDate ? applyTaskTime(g.contextDate, t) : null, label: `🗓️ ${t.text}`, done: !!t.done, t,
+        key: `h-${g.id}-${idx}`, date: g.contextDate ? applyTaskTime(g.contextDate, t) : null, label: `🗓️ ${t.text}`, done: !!t.done, t, source: 'holiday',
         onToggle: () => toggleHolidayTask(g.id, idx), onDelete: () => deleteHolidayTask(g.id, idx),
         onTogglePerson: p => toggleHolidayInvitePerson(g.id, idx, p), onPatch: patch => patchHolidayTask(g.id, idx, patch),
         extra: holidayExtraFor(g.id, idx, t),
@@ -466,7 +505,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   eventGroups.forEach(g => {
     g.tasks.forEach(({ t, idx }: any) => {
       calendarItems.push({
-        key: `e-${g.id}-${idx}`, date: g.contextDate ? applyTaskTime(g.contextDate, t) : null, label: `📅 ${t.text}`, done: !!t.done, t,
+        key: `e-${g.id}-${idx}`, date: g.contextDate ? applyTaskTime(g.contextDate, t) : null, label: `📅 ${t.text}`, done: !!t.done, t, source: 'event',
         onToggle: () => toggleEventTask(g.id, idx), onDelete: () => deleteEventTask(g.id, idx),
         onTogglePerson: p => toggleEventInvitePerson(g.id, idx, p), onPatch: patch => patchEventTask(g.id, idx, patch),
       });
@@ -475,8 +514,8 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
 
   standaloneTasks.forEach(({ t, idx }: any) => {
     calendarItems.push({
-      key: `s-${idx}`, date: t.dueDate ? applyTaskTime(new Date(t.dueDate), t) : null, label: `📌 ${t.text}`, done: !!t.done, t,
-      onToggle: t.kind === 'homeVisit' ? () => markHomeVisitDone(t.roundId, t.personName) : () => toggleStandaloneTask(idx),
+      key: `s-${idx}`, date: t.dueDate ? applyTaskTime(new Date(t.dueDate), t) : null, label: `📌 ${t.text}`, done: !!t.done, t, source: 'standalone',
+      onToggle: t.kind === 'homeVisit' ? () => handleMarkHomeVisitDone(t.roundId, t.personName, t.text) : () => toggleStandaloneTask(idx),
       onDelete: () => deleteStandaloneTask(idx), onTogglePerson: p => toggleStandaloneInvitePerson(idx, p),
       onPatch: patch => patchStandaloneTask(idx, patch), extra: standaloneExtraFor(t),
     });
@@ -501,50 +540,59 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
           <div className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#C9A84C]">משימות</div>
           <div className="text-[11px] text-white/45 mt-[1px]">{openHolidayCount + openEventCount + openStandaloneCount} משימות פתוחות · {personalDates.length} תאריכים ב-30 הימים הקרובים</div>
         </div>
-        <button onClick={() => setIsAddOpen(true)} className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0 hover:bg-white/20 transition-colors">
+        <button
+          onClick={() => setIsControlsOpen(o => !o)}
+          title="מיון ותצוגה"
+          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors ${isControlsOpen ? 'bg-[#C9A84C] text-[#0D1B2A]' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
+        >
+          <SlidersHorizontal size={16} />
+        </button>
+        <button onClick={() => setIsAddOpen(true)} className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0 hover:bg-white/20 transition-colors mr-1.5">
           <Plus size={18} />
         </button>
       </div>
 
-      {/* מיון */}
-      <div className="px-4 md:px-6 pt-3 flex items-center gap-2">
-        <span className="text-[11px] text-gray-400">מיין לפי:</span>
-        <button
-          onClick={() => setSortKey('date')}
-          className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${sortKey === 'date' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
-        >
-          📅 תאריך / זמן שנותר
-        </button>
-        <button
-          onClick={() => setSortKey('priority')}
-          className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${sortKey === 'priority' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
-        >
-          🔥 דחיפות
-        </button>
-      </div>
-
-      {/* תצוגה */}
-      <div className="px-4 md:px-6 pt-2 flex items-center gap-2">
-        <span className="text-[11px] text-gray-400">תצוגה:</span>
-        <button
-          onClick={() => setViewMode('grouped')}
-          className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${viewMode === 'grouped' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
-        >
-          📁 לפי קטגוריה
-        </button>
-        <button
-          onClick={() => setViewMode('flat')}
-          className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${viewMode === 'flat' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
-        >
-          📋 רשימה אחת
-        </button>
-        <button
-          onClick={() => setViewMode('calendar')}
-          className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${viewMode === 'calendar' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
-        >
-          📆 לוח שנה
-        </button>
-      </div>
+      {/* מיון + תצוגה — מכווץ כברירת מחדל, נפתח דרך כפתור הפילטר בטופבר */}
+      {isControlsOpen && (
+        <div className="px-4 md:px-6 pt-3 pb-1 space-y-2 bg-[#FAF6EE] border-b border-[#EDE6D6] animate-in fade-in duration-150">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-gray-400">מיין לפי:</span>
+            <button
+              onClick={() => setSortKey('date')}
+              className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${sortKey === 'date' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
+            >
+              📅 תאריך / זמן שנותר
+            </button>
+            <button
+              onClick={() => setSortKey('priority')}
+              className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${sortKey === 'priority' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
+            >
+              🔥 דחיפות
+            </button>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap pb-2">
+            <span className="text-[11px] text-gray-400">תצוגה:</span>
+            <button
+              onClick={() => setViewMode('grouped')}
+              className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${viewMode === 'grouped' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
+            >
+              📁 לפי קטגוריה
+            </button>
+            <button
+              onClick={() => setViewMode('flat')}
+              className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${viewMode === 'flat' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
+            >
+              📋 רשימה אחת
+            </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`text-[11px] px-2.5 py-1 rounded-full border font-medium ${viewMode === 'calendar' ? 'bg-[#0D1B2A] text-[#E8C97A] border-[#0D1B2A]' : 'bg-white text-gray-500 border-[#EDE6D6]'}`}
+            >
+              📆 לוח שנה
+            </button>
+          </div>
+        </div>
+      )}
 
       {viewMode === 'flat' ? (
         <div className="p-4 md:p-6 max-w-2xl">
@@ -557,7 +605,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
       ) : viewMode === 'calendar' ? (
         <div className="p-4 md:p-6 max-w-3xl">
           <TaskCalendarView
-            items={calendarItems.map(i => ({ key: i.key, date: i.date, label: i.label, done: i.done }))}
+            items={calendarItems.map(i => ({ key: i.key, date: i.date, label: i.label, done: i.done, source: i.source }))}
             onSelect={setCalendarSelectedKey}
           />
         </div>
@@ -584,7 +632,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
                         <div className="text-xs text-gray-600 mt-0.5">{c.msg}</div>
                       </div>
                     </div>
-                    <QuickLogButtons donorName={c.name} compact />
+                    <QuickLogButtons donorName={c.name} compact personalDateContext={{ onComplete: () => dismissPersonalDate(c) }} />
                     <TaskDetailsPanel task={syntheticTask} onPatch={patch => patchPersonalDate(c.key, patch)} />
                   </div>
                 );
@@ -683,7 +731,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
                 <div key={idx}>
                   {renderTaskItem(
                     t,
-                    t.kind === 'homeVisit' ? () => markHomeVisitDone(t.roundId, t.personName) : () => toggleStandaloneTask(idx),
+                    t.kind === 'homeVisit' ? () => handleMarkHomeVisitDone(t.roundId, t.personName, t.text) : () => toggleStandaloneTask(idx),
                     () => deleteStandaloneTask(idx),
                     p => toggleStandaloneInvitePerson(idx, p),
                     patch => patchStandaloneTask(idx, patch),
@@ -804,6 +852,29 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
             )}
           </div>
         </div>
+      )}
+
+      {completionPrompt && (
+        <CompletionFollowUpModal
+          sourceLabel={completionPrompt.label}
+          onSkip={() => setCompletionPrompt(null)}
+          onCreateFollowUp={(text, dueDate) => {
+            const newTask: any = stampCreated({ text, done: false });
+            if (dueDate) newTask.dueDate = dueDate;
+            const target = completionPrompt.target;
+            if (target.kind === 'holiday') {
+              updateHolidayExtras(target.id, { tasks: [...(holidayExtras[target.id]?.tasks || []), newTask] });
+            } else if (target.kind === 'event') {
+              updateEventsData((eventsData as any[]).map((e: any) => e.id === target.id ? { ...e, tasks: [...(e.tasks || []), newTask] } : e));
+            } else {
+              // 'standalone' וגם 'personal' (תזכורת תאריך אישי) — משימת המשך
+              // חופשית ברשימת המשימות החד-פעמיות.
+              updateHolidayExtras(STANDALONE_TASKS_ID, { tasks: [...allStandaloneTasks, newTask] });
+            }
+            logAction('task_create');
+            setCompletionPrompt(null);
+          }}
+        />
       )}
     </div>
   );

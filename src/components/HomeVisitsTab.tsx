@@ -7,12 +7,14 @@ import {
 } from '../lib/homeVisits';
 import { buildHolidayList } from '../lib/holidayList';
 import { getCustomHols } from '../lib/api';
-import { STANDALONE_TASKS_ID } from '../lib/tasks';
+import { STANDALONE_TASKS_ID, stampCreated } from '../lib/tasks';
+import { logAction } from '../lib/score';
+import { CompletionFollowUpModal } from './CompletionFollowUpModal';
 
 export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; count: number } }) {
   const {
     homeVisits, visibleDonors, crm, donations, holidays, holidayExtras,
-    startHomeVisitRound, markHomeVisitDone, createHomeVisitTaskForEntry,
+    startHomeVisitRound, markHomeVisitDone, createHomeVisitTaskForEntry, updateHolidayExtras,
     updateHomeVisitEntry, reorderHomeVisitEntries, archiveHomeVisitRound, deleteHomeVisitRound,
     removeHomeVisitEntry, addHomeVisitEntries, updateHomeVisitRoundMeta,
   } = useAppStore();
@@ -21,6 +23,12 @@ export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; coun
   const [pickerRoundId, setPickerRoundId] = useState<string | null>(null);
   const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set());
   const [pickerSearch, setPickerSearch] = useState('');
+  const [completionPrompt, setCompletionPrompt] = useState<string | null>(null);
+
+  const handleMarkDone = (roundId: string, name: string) => {
+    markHomeVisitDone(roundId, name);
+    setCompletionPrompt(`🏠 ביקור בית — ${name}`);
+  };
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -158,7 +166,7 @@ export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; coun
             hasOpenTask={hasOpenTask}
             onUpdateEntry={(name, patch) => updateHomeVisitEntry(round.id, name, patch)}
             onReorder={(from, to) => reorderHomeVisitEntries(round.id, from, to)}
-            onMarkDone={(name) => markHomeVisitDone(round.id, name)}
+            onMarkDone={(name) => handleMarkDone(round.id, name)}
             onCreateTask={(name) => createHomeVisitTaskForEntry(round.id, name)}
             onRemove={(name) => removeHomeVisitEntry(round.id, name)}
             onArchive={() => archiveHomeVisitRound(round.id)}
@@ -266,6 +274,21 @@ export function HomeVisitsTab({ addTrigger }: { addTrigger?: { tab: string; coun
             </button>
           </div>
         </div>
+      )}
+
+      {completionPrompt && (
+        <CompletionFollowUpModal
+          sourceLabel={completionPrompt}
+          onSkip={() => setCompletionPrompt(null)}
+          onCreateFollowUp={(text, dueDate) => {
+            const newTask: any = stampCreated({ text, done: false });
+            if (dueDate) newTask.dueDate = dueDate;
+            const tasks = holidayExtras[STANDALONE_TASKS_ID]?.tasks || [];
+            updateHolidayExtras(STANDALONE_TASKS_ID, { tasks: [...tasks, newTask] });
+            logAction('task_create');
+            setCompletionPrompt(null);
+          }}
+        />
       )}
     </div>
   );

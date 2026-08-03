@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Plus, Users, Calendar, PieChart, Info, AlertTriangle, CheckCircle, ChevronLeft, Pencil, X, CalendarDays, MessageSquare, ClipboardList } from 'lucide-react';
+import { Plus, Users, Calendar, Info, AlertTriangle, CheckCircle, ChevronLeft, Pencil, X, CalendarDays, MessageSquare, ClipboardList } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
 import { HolidayModal } from './HolidayModal';
 import { DateConverterModal } from './DateConverterModal';
@@ -13,7 +13,7 @@ import { countHkByStatus, isMonthlyReminderReviewed, markMonthlyReminderReviewed
 import { HDate } from '@hebcal/core';
 import { toCanonicalHebrewString } from '../lib/hebrewDates';
 
-export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => void, onDonationClick: () => void }) {
+export function HomeTab({ setTab, onDonationClick, onQuickAdd }: { setTab: (t: string) => void, onDonationClick: () => void, onQuickAdd: (tab: string) => void }) {
   const { summary, effectiveSummary, donations, failures, hk, rebbeDate, crm, visibleDonors, shabbat, holidays, hebrewDate, updateRebbeDate, holidayExtras, eventsData, settings } = useAppStore();
   const [selectedDonor, setSelectedDonor] = useState<string | null>(null);
   const [selectedHoliday, setSelectedHoliday] = useState<any | null>(null);
@@ -224,15 +224,15 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
       <div className="flex items-center justify-between mb-1">
         <div className="text-[11px] text-white/60 uppercase tracking-widest flex items-center gap-1.5 cursor-pointer"
           onClick={() => alert('הסכום משקף את כל התרומות והוראות הקבע שחויבו בפועל. הסכום אינו כולל חיובים שסורבו ע"י חברת האשראי.')}>
-          <span>{settings.donationsSinceDate ? `סה"כ תרומות מ-${new Date(settings.donationsSinceDate).toLocaleDateString('he-IL')}` : 'סה"כ תרומות מתחילת השנה'}</span>
+          <span>תרומות החודש</span>
           <Info size={12} className="text-white/40" />
         </div>
       </div>
       <div className="font-['Frank_Ruhl_Libre'] text-4xl font-black text-[#E8C97A] leading-none mb-1">
-        <span className="text-xl font-normal ml-1">₪</span>{effectiveSummary?.total?.toLocaleString() || 0}
+        <span className="text-xl font-normal ml-1">₪</span>{effectiveSummary?.thisMonthTotal?.toLocaleString() || 0}
       </div>
       <div className="flex items-center justify-between text-xs text-white/45">
-        <div>החודש: ₪{effectiveSummary?.thisMonthTotal?.toLocaleString() || 0} · {effectiveSummary?.donorCount || 0} אנשי קשר תרמו</div>
+        <div>{effectiveSummary?.donorCount || 0} אנשי קשר תרמו {settings.donationsSinceDate ? `מ-${new Date(settings.donationsSinceDate).toLocaleDateString('he-IL')}` : 'השנה'}</div>
       </div>
       <div className="text-[9px] text-white/30 mt-1 opacity-80">(כולל הו"ק. ללא עסקאות שסורבו)</div>
       <div className="flex flex-wrap gap-2 mt-3">
@@ -249,20 +249,27 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
   );
 
   const renderStatsRow = () => (
-    <div className="grid grid-cols-2 gap-3">
-      <div className="bg-white rounded-xl p-3.5 shadow-sm cursor-pointer active:scale-95 transition-transform hover:border hover:border-[#C9A84C]/30"
-        onClick={() => setTab('donors')}>
-        <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">תורמים</div>
-        <div className="font-['Frank_Ruhl_Libre'] text-3xl font-bold text-[#0D1B2A] leading-none mb-1">{effectiveSummary?.donorCount || 0}</div>
-        <div className="text-[11px] text-[#9B7A2F] font-medium flex items-center gap-1">פעילים <ChevronLeft size={11} /></div>
+    <div className="grid grid-cols-3 gap-2.5">
+      <div className="bg-white rounded-xl p-3 shadow-sm cursor-pointer active:scale-95 transition-transform hover:border hover:border-[#C9A84C]/30"
+        onClick={() => setTab('reports')}
+        title={settings.donationsSinceDate ? `מ-${new Date(settings.donationsSinceDate).toLocaleDateString('he-IL')}` : 'מתחילת השנה'}>
+        <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1 truncate">{settings.donationsSinceDate ? 'תרומות מ-תאריך' : 'תרומות מתחילת שנה'}</div>
+        <div className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] leading-none mb-1">₪{effectiveSummary?.total?.toLocaleString() || 0}</div>
+        <div className="text-[10px] text-[#9B7A2F] font-medium flex items-center gap-1">דוחות <ChevronLeft size={10} /></div>
       </div>
-      <div className="bg-white rounded-xl p-3.5 shadow-sm cursor-pointer active:scale-95 transition-transform hover:border hover:border-[#C9A84C]/30"
+      <div className="bg-white rounded-xl p-3 shadow-sm cursor-pointer active:scale-95 transition-transform hover:border hover:border-[#C9A84C]/30"
         onClick={() => setTab('donors')}>
-        <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">הוראות קבע</div>
-        <div className="font-['Frank_Ruhl_Libre'] text-3xl font-bold text-[#0D1B2A] leading-none mb-1">{summary?.hkActive || 0}</div>
-        <div className="text-[11px] font-medium">
+        <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">תורמים</div>
+        <div className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] leading-none mb-1">{effectiveSummary?.donorCount || 0}</div>
+        <div className="text-[10px] text-[#9B7A2F] font-medium flex items-center gap-1">פעילים <ChevronLeft size={10} /></div>
+      </div>
+      <div className="bg-white rounded-xl p-3 shadow-sm cursor-pointer active:scale-95 transition-transform hover:border hover:border-[#C9A84C]/30"
+        onClick={() => setTab('donors')}>
+        <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">הוראות קבע</div>
+        <div className="font-['Frank_Ruhl_Libre'] text-xl font-bold text-[#0D1B2A] leading-none mb-1">{summary?.hkActive || 0}</div>
+        <div className="text-[10px] font-medium">
           {(summary?.failureCount || 0) > 0 ? (
-            <span className="text-amber-500 flex items-center gap-1"><AlertTriangle size={10} /> {summary?.failureCount || 0} שגיאות</span>
+            <span className="text-amber-500 flex items-center gap-1"><AlertTriangle size={10} /> {summary?.failureCount || 0}</span>
           ) : (
             <span className="text-green-500 flex items-center gap-1"><CheckCircle size={10} /> תקין</span>
           )}
@@ -276,16 +283,16 @@ export function HomeTab({ setTab, onDonationClick }: { setTab: (t: string) => vo
       <h2 className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A] mb-3">פעולות מהירות</h2>
       <div className="grid grid-cols-4 md:grid-cols-2 gap-2">
         <button onClick={onDonationClick} className="bg-white rounded-xl p-3 flex flex-col items-center gap-1 shadow-sm active:scale-95 transition-transform">
-          <span className="text-2xl">💰</span><span className="text-[10px] font-semibold text-[#0D1B2A]">תרומה</span>
+          <span className="text-2xl">💰</span><span className="text-[10px] font-semibold text-[#0D1B2A]">הוספת תרומה</span>
         </button>
-        <button onClick={() => setTab('donors')} className="bg-white rounded-xl p-3 flex flex-col items-center gap-1 shadow-sm active:scale-95 transition-transform">
-          <Users size={24} className="text-[#0D1B2A]" /><span className="text-[10px] font-semibold text-[#0D1B2A]">אנשי קשר</span>
+        <button onClick={() => onQuickAdd('donors')} className="bg-white rounded-xl p-3 flex flex-col items-center gap-1 shadow-sm active:scale-95 transition-transform">
+          <Users size={24} className="text-[#0D1B2A]" /><span className="text-[10px] font-semibold text-[#0D1B2A]">הוספת איש קשר</span>
         </button>
-        <button onClick={() => setTab('tasks')} className="bg-white rounded-xl p-3 flex flex-col items-center gap-1 shadow-sm active:scale-95 transition-transform">
-          <ClipboardList size={24} className="text-[#0D1B2A]" /><span className="text-[10px] font-semibold text-[#0D1B2A]">משימות</span>
+        <button onClick={() => onQuickAdd('tasks')} className="bg-white rounded-xl p-3 flex flex-col items-center gap-1 shadow-sm active:scale-95 transition-transform">
+          <ClipboardList size={24} className="text-[#0D1B2A]" /><span className="text-[10px] font-semibold text-[#0D1B2A]">הוספת משימה</span>
         </button>
-        <button onClick={() => setTab('reports')} className="bg-white rounded-xl p-3 flex flex-col items-center gap-1 shadow-sm active:scale-95 transition-transform">
-          <PieChart size={24} className="text-[#0D1B2A]" /><span className="text-[10px] font-semibold text-[#0D1B2A]">דוחות</span>
+        <button onClick={() => onQuickAdd('events')} className="bg-white rounded-xl p-3 flex flex-col items-center gap-1 shadow-sm active:scale-95 transition-transform">
+          <Calendar size={24} className="text-[#0D1B2A]" /><span className="text-[10px] font-semibold text-[#0D1B2A]">יצירת אירוע</span>
         </button>
       </div>
     </div>

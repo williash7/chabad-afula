@@ -1,19 +1,32 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../store/AppContext';
 import { computeLastContactByName } from '../lib/contactFocus';
-import { getScoreSnapshot, backfillLastWeek, getWeekActivities, POINT_RULES, SCORE_ACTION_EVENT } from '../lib/score';
-import { TrendingUp, Flame, ChevronDown, Info } from 'lucide-react';
+import { getScoreSnapshot, backfillLastWeek, getWeekActivities, getActivityCounts, getActivityHeatmap, SCORE_ACTION_EVENT } from '../lib/score';
+import { TrendingUp, Flame, ChevronDown } from 'lucide-react';
+
+const HEATMAP_WEEKS = 12;
+// דרגות עוצמה של גוון בודד (זהב המותג) — קידוד רציף לפי כמות, לא צבעים שונים
+const HEAT_STEPS = ['bg-[#EDE6D6]', 'bg-[#C9A84C]/25', 'bg-[#C9A84C]/50', 'bg-[#C9A84C]/75', 'bg-[#C9A84C]'];
+const HEAT_WEEKDAY_LABELS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+
+function heatStep(count: number, max: number): string {
+  if (count === 0 || max === 0) return HEAT_STEPS[0];
+  const ratio = count / max;
+  if (ratio > 0.75) return HEAT_STEPS[4];
+  if (ratio > 0.5) return HEAT_STEPS[3];
+  if (ratio > 0.25) return HEAT_STEPS[2];
+  return HEAT_STEPS[1];
+}
 
 export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) => void } = {}) {
   const { visibleDonors, donations } = useAppStore();
   const [toast, setToast] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
-  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [detailWeek, setDetailWeek] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = (e: any) => {
-      setToast(`+${e.detail.points} נקודות`);
+      setToast(`✓ ${e.detail.label}`);
       setTimeout(() => setToast(null), 2000);
       setTick(t => t + 1);
     };
@@ -21,12 +34,13 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
     return () => window.removeEventListener(SCORE_ACTION_EVENT, handler);
   }, []);
 
-  // גיבוי חד-פעמי: נותן נקודות רטרואקטיביות על תרומות/מפגשים מהשבוע האחרון
-  // (לא רץ פעם שנייה — הפונקציה עצמה שומרת סימון ב-localStorage)
+  // גיבוי חד-פעמי: רושם רטרואקטיבית פעולות (תרומות/מפגשים) מהשבוע האחרון
+  // (לא רץ פעם שנייה — הפונקציה עצמה שומרת סימון ב-localStorage). עדיין
+  // מבוסס על אותו יומן פעילות פנימי, גם אם לא מוצג יותר כ"ניקוד".
   useEffect(() => {
     const result = backfillLastWeek(donations);
     if (result && result.count > 0) {
-      setToast(`עודכן ניקוד רטרואקטיבי: +${result.points} נקודות מ-${result.count} פעולות השבוע האחרון`);
+      setToast(`עודכן רטרואקטיבית: ${result.count} פעולות מהשבוע האחרון`);
       setTimeout(() => setToast(null), 4000);
       setTick(t => t + 1);
     }
@@ -36,14 +50,17 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
   const today = useMemo(() => new Date(), [tick]);
   const snapshot = useMemo(() => getScoreSnapshot(today), [today]);
 
-  const { total, streak, thisWeek, lastWeek, bestWeek } = snapshot;
-  const progress = total % 100;
-  const milestones = Math.floor(total / 100);
+  const { streak, thisWeek, lastWeek, bestWeek } = snapshot;
 
   const weekActivities = useMemo(() => detailWeek ? getWeekActivities(detailWeek) : [], [detailWeek, tick]);
 
-  const weeklyChangePct = lastWeek && lastWeek.points > 0
-    ? Math.round(((thisWeek.points - lastWeek.points) / lastWeek.points) * 100)
+  const activityCounts30 = useMemo(() => getActivityCounts(30), [tick]);
+  const heatmap = useMemo(() => getActivityHeatmap(HEATMAP_WEEKS), [tick]);
+  const maxHeat = useMemo(() => Math.max(1, ...heatmap.map(h => h.count)), [heatmap]);
+  const maxActivityCount = useMemo(() => Math.max(1, ...activityCounts30.map(a => a.count)), [activityCounts30]);
+
+  const weeklyChangePct = lastWeek && lastWeek.actions > 0
+    ? Math.round(((thisWeek.actions - lastWeek.actions) / lastWeek.actions) * 100)
     : null;
 
   const temperature = useMemo(() => {
@@ -68,8 +85,8 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
           <TrendingUp size={20} className="text-white" />
         </div>
         <div className="flex-1 px-3 md:px-0">
-          <div className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#C9A84C]">ניקוד</div>
-          <div className="text-[11px] text-white/45 mt-[1px]">{total.toLocaleString()} נקודות סה"כ</div>
+          <div className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#C9A84C]">פעילות</div>
+          <div className="text-[11px] text-white/45 mt-[1px]">{thisWeek.actions} פעולות השבוע · {streak} ימים ברצף</div>
         </div>
       </div>
 
@@ -89,16 +106,64 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
           )}
         </div>
 
-        {/* קטע 2: בר עד 100 הבאות */}
+        {/* קטע 2: ימי פעילות (heatmap) */}
         <div className="bg-white rounded-2xl shadow-sm p-4 border border-gray-100">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-bold text-gray-400 uppercase tracking-wide">עד 100 הבאות</span>
-            <span className="text-sm font-bold text-[#0D1B2A]">{progress}/100</span>
+          <div className="text-sm font-bold text-gray-400 uppercase tracking-wide mb-3">ימי פעילות — {HEATMAP_WEEKS} שבועות אחרונים</div>
+          <div className="overflow-x-auto pb-1">
+            <div className="inline-flex gap-[3px]">
+              <div className="flex flex-col gap-[3px] ml-0.5">
+                {HEAT_WEEKDAY_LABELS.map((w, i) => (
+                  <div key={i} className="w-3.5 h-3.5 flex items-center justify-center text-[8px] text-gray-400">{i % 2 === 1 ? w : ''}</div>
+                ))}
+              </div>
+              {Array.from({ length: HEATMAP_WEEKS }, (_, w) => (
+                <div key={w} className="flex flex-col gap-[3px]">
+                  {Array.from({ length: 7 }, (_, dRow) => {
+                    const idx = w * 7 + dRow;
+                    const day = heatmap[idx];
+                    if (!day) return <div key={dRow} className="w-3.5 h-3.5 rounded-sm" />;
+                    return (
+                      <div
+                        key={dRow}
+                        title={`${day.date} · ${day.count} פעולות`}
+                        className={`w-3.5 h-3.5 rounded-sm ${heatStep(day.count, maxHeat)}`}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="w-full h-3 bg-[#FAF6EE] rounded-full overflow-hidden">
-            <div className="h-full bg-[#C9A84C] rounded-full transition-all" style={{ width: `${progress}%` }} />
+          <div className="flex items-center gap-1.5 mt-2 text-[10px] text-gray-400">
+            <span>פחות</span>
+            {HEAT_STEPS.map((s, i) => <div key={i} className={`w-2.5 h-2.5 rounded-sm ${s}`} />)}
+            <span>יותר</span>
           </div>
-          <div className="text-[11px] text-gray-400 mt-2">{progress}/100 נקודות למיילסטון הבא · {milestones} מיילסטונים הושלמו עד כה ✓</div>
+        </div>
+
+        {/* קטע 2.5: פעילות לפי סוג (30 יום אחרונים) */}
+        <div className="bg-white rounded-2xl shadow-sm p-4 border border-gray-100">
+          <div className="text-sm font-bold text-gray-400 uppercase tracking-wide mb-3">פעילות לפי סוג — 30 יום אחרונים</div>
+          {activityCounts30.length === 0 ? (
+            <div className="text-center py-4 text-gray-400 text-sm">אין עדיין פעילות מתועדת</div>
+          ) : (
+            <div className="space-y-2.5">
+              {activityCounts30.map(a => (
+                <div key={a.key}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-[#0D1B2A] flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${a.category === 'execution' ? 'bg-emerald-400' : 'bg-blue-400'}`} />
+                      {a.label}
+                    </span>
+                    <span className="text-xs font-bold text-[#0D1B2A]">{a.count}</span>
+                  </div>
+                  <div className="w-full h-2 bg-[#FAF6EE] rounded-full overflow-hidden">
+                    <div className="h-full bg-[#C9A84C] rounded-full" style={{ width: `${(a.count / maxActivityCount) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* קטע 3: סיכום שבועי */}
@@ -110,9 +175,9 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
               disabled={thisWeek.actions === 0}
               className={`rounded-xl p-3 text-center transition-colors disabled:cursor-default ${detailWeek === thisWeek.week ? 'bg-[#C9A84C]/15 border border-[#C9A84C]/40' : 'bg-[#FAF6EE] border border-transparent'}`}
             >
-              <div className="font-['Frank_Ruhl_Libre'] font-black text-[#0D1B2A] text-xl">{thisWeek.points}</div>
+              <div className="font-['Frank_Ruhl_Libre'] font-black text-[#0D1B2A] text-xl">{thisWeek.actions}</div>
               <div className="text-[11px] text-gray-500 mt-0.5 flex items-center justify-center gap-1">
-                השבוע · {thisWeek.actions} פעולות
+                השבוע · פעולות
                 {thisWeek.actions > 0 && <ChevronDown size={11} className={`transition-transform ${detailWeek === thisWeek.week ? 'rotate-180' : ''}`} />}
               </div>
             </button>
@@ -121,9 +186,9 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
               disabled={!lastWeek || lastWeek.actions === 0}
               className={`rounded-xl p-3 text-center transition-colors disabled:cursor-default ${lastWeek && detailWeek === lastWeek.week ? 'bg-[#C9A84C]/15 border border-[#C9A84C]/40' : 'bg-[#FAF6EE] border border-transparent'}`}
             >
-              <div className="font-['Frank_Ruhl_Libre'] font-black text-[#0D1B2A] text-xl">{lastWeek?.points ?? '—'}</div>
+              <div className="font-['Frank_Ruhl_Libre'] font-black text-[#0D1B2A] text-xl">{lastWeek?.actions ?? '—'}</div>
               <div className="text-[11px] text-gray-500 mt-0.5 flex items-center justify-center gap-1">
-                שבוע שעבר{lastWeek ? ` · ${lastWeek.actions} פעולות` : ''}
+                שבוע שעבר · פעולות
                 {lastWeek && lastWeek.actions > 0 && <ChevronDown size={11} className={`transition-transform ${detailWeek === lastWeek.week ? 'rotate-180' : ''}`} />}
               </div>
             </button>
@@ -133,11 +198,8 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
             <div className="space-y-1.5 mb-3 border-t border-dashed border-gray-100 pt-3">
               {weekActivities.map((a, i) => (
                 <div key={i} className="flex items-center justify-between gap-2 bg-[#FAF6EE] rounded-lg px-3 py-1.5">
-                  <div className="min-w-0">
-                    <span className="text-xs text-[#0D1B2A]">{a.label}</span>
-                    <span className="text-[10px] text-gray-400 mr-1.5">{a.date.split('-').reverse().slice(0, 2).join('/')}</span>
-                  </div>
-                  <span className="shrink-0 text-xs font-bold text-[#C9A84C]">+{a.points}</span>
+                  <span className="text-xs text-[#0D1B2A]">{a.label}</span>
+                  <span className="shrink-0 text-[10px] text-gray-400">{a.date.split('-').reverse().slice(0, 2).join('/')}</span>
                 </div>
               ))}
             </div>
@@ -183,30 +245,6 @@ export function ScoreTab({ onContactClick }: { onContactClick?: (name: string) =
                   </button>
                 </div>
               ))}
-            </div>
-          )}
-        </div>
-
-        {/* טבלת ניקוד — מידע: כמה שווה כל פעולה */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <button onClick={() => setIsInfoOpen(v => !v)} className="w-full flex items-center justify-between p-4">
-            <span className="text-sm font-bold text-gray-400 uppercase tracking-wide flex items-center gap-2"><Info size={15} /> טבלת ניקוד — כמה שווה כל פעולה</span>
-            <ChevronDown size={16} className={`text-gray-400 transition-transform ${isInfoOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {isInfoOpen && (
-            <div className="px-4 pb-4 space-y-1.5">
-              {Object.entries(POINT_RULES).map(([key, rule]) => (
-                <div key={key} className="flex items-center justify-between gap-2 bg-[#FAF6EE] rounded-lg px-3 py-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${rule.category === 'execution' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                      {rule.category === 'execution' ? 'ביצוע' : 'תכנון'}
-                    </span>
-                    <span className="text-sm text-[#0D1B2A] truncate">{rule.label}</span>
-                  </div>
-                  <span className="shrink-0 text-sm font-bold text-[#C9A84C]">+{rule.points}</span>
-                </div>
-              ))}
-              <p className="text-[10px] text-gray-400 pt-1">פעולות "ביצוע" (השלמה בפועל) שוות יותר מפעולות "תכנון" (יצירה מראש). כמה משימות/הזמנות שנוספות יחד (למשל דרך תכנון AI) מנוקדות לפי מספרן.</p>
             </div>
           )}
         </div>

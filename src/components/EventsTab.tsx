@@ -9,6 +9,7 @@ import { findLatestHistoryFor } from '../lib/history';
 import { AIPlanningAssistant } from './AIPlanningAssistant';
 import { FacebookPostAssistant } from './FacebookPostAssistant';
 import { TaskDetailsPanel } from './TaskDetailsPanel';
+import { CompletionFollowUpModal } from './CompletionFollowUpModal';
 
 export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: number } } = {}) {
   const { eventsData, updateEventsData, visibleDonors, crm, hk, failures, settings, refresh, history, archiveOccurrence, importTasksFromHistory } = useAppStore();
@@ -20,6 +21,7 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
   const [taskText, setTaskText] = useState('');
   const [taskDate, setTaskDate] = useState('');
   const [taskTime, setTaskTime] = useState('');
+  const [completionPrompt, setCompletionPrompt] = useState<{ label: string; eventId: string } | null>(null);
 
   const [evName, setEvName] = useState('');
   const [evType, setEvType] = useState('shabbat');
@@ -184,7 +186,10 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
     const wasDone = nextTasks[idx].done;
     nextTasks[idx] = { ...nextTasks[idx], done: !nextTasks[idx].done };
     updateEventsData(eventsData.map((e: any) => e.id === tasksEventId ? { ...e, tasks: nextTasks } : e));
-    if (!wasDone) logAction('task_complete');
+    if (!wasDone) {
+      logAction('task_complete');
+      setCompletionPrompt({ label: nextTasks[idx].text, eventId: tasksEventId! });
+    }
   };
 
   const addEventTask = () => {
@@ -656,6 +661,20 @@ export function EventsTab({ addTrigger }: { addTrigger?: { tab: string; count: n
              </div>
            </div>
         </div>
+      )}
+
+      {completionPrompt && (
+        <CompletionFollowUpModal
+          sourceLabel={completionPrompt.label}
+          onSkip={() => setCompletionPrompt(null)}
+          onCreateFollowUp={(text, dueDate) => {
+            const newTask: any = stampCreated({ text, done: false });
+            if (dueDate) newTask.dueDate = dueDate;
+            updateEventsData(eventsData.map((e: any) => e.id === completionPrompt.eventId ? { ...e, tasks: [...(e.tasks || []), newTask] } : e));
+            logAction('task_create');
+            setCompletionPrompt(null);
+          }}
+        />
       )}
     </div>
   );

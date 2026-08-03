@@ -192,6 +192,59 @@ function parseDdMmYyyy(s: string): Date | null {
   return isNaN(dt.getTime()) ? null : dt;
 }
 
+export interface ActivityCount {
+  key: PointRuleKey;
+  label: string;
+  category: 'planning' | 'execution';
+  count: number;
+}
+
+// מתאים שורת יומן פעילות בחזרה לסוג הפעולה (POINT_RULES) לפי תחילת הטקסט —
+// הטקסט עצמו יכול לכלול סיומת "×N" (כמה פעולות זהות ביחד) או "(גיבוי)"
+// (רטרואקטיבי), ששניהם נשמרים כתחילית תואמת ל-rule.label.
+function matchRuleKey(label: string): PointRuleKey | null {
+  const keys = Object.keys(POINT_RULES) as PointRuleKey[];
+  return keys.find(k => label === POINT_RULES[k].label || label.startsWith(POINT_RULES[k].label + ' ')) || null;
+}
+
+// כמה פעמים בוצע כל סוג פעולה — לתצוגת "סטטיסטיקת פעילות" (במקום ניקוד).
+// days=undefined בודק את כל יומן הפעילות השמור (עד ACTIVITY_LOG_MAX רשומות).
+export function getActivityCounts(days?: number): ActivityCount[] {
+  const log = readActivityLog();
+  const cutoff = days ? toDateStr(new Date(Date.now() - (days - 1) * 86400000)) : null;
+  const totals = new Map<PointRuleKey, number>();
+  log.forEach(e => {
+    if (cutoff && e.date < cutoff) return;
+    const key = matchRuleKey(e.label);
+    if (!key) return;
+    const m = /×(\d+)/.exec(e.label);
+    const n = m ? parseInt(m[1], 10) : 1;
+    totals.set(key, (totals.get(key) || 0) + n);
+  });
+  return Array.from(totals.entries())
+    .map(([key, count]) => ({ key, label: POINT_RULES[key].label, category: POINT_RULES[key].category, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+export interface HeatmapDay { date: string; count: number; }
+
+// מפת יום→כמות פעולות ל-N השבועות האחרונים (כולל השבוע הנוכחי) — לגרף ימי
+// פעילות מסוג "GitHub contribution graph".
+export function getActivityHeatmap(weeks: number): HeatmapDay[] {
+  const log = readActivityLog();
+  const counts = new Map<string, number>();
+  log.forEach(e => counts.set(e.date, (counts.get(e.date) || 0) + 1));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(today.getTime() - (weeks * 7 - 1) * 86400000);
+  const days: HeatmapDay[] = [];
+  for (let d = new Date(start); d.getTime() <= today.getTime(); d.setDate(d.getDate() + 1)) {
+    const ds = toDateStr(d);
+    days.push({ date: ds, count: counts.get(ds) || 0 });
+  }
+  return days;
+}
+
 export interface BackfillResult { count: number; points: number; }
 
 // גיבוי חד-פעמי: נותן נקודות רטרואקטיביות על תרומות ומפגשים מ-7 הימים האחרונים,

@@ -9,7 +9,7 @@ export interface SubTask {
 export interface TaskItem {
   text: string;
   done: boolean;
-  kind?: 'invite' | 'holidayReminder' | 'homeVisit' | 'eventReminder' | 'meeting';
+  kind?: 'invite' | 'holidayReminder' | 'homeVisit' | 'eventReminder' | 'meeting' | 'thankYou';
   people?: string[];
   doneNames?: string[];
   dueDate?: string; // ISO date (YYYY-MM-DD) — "מתי". גם מזהה המופע למשימות kind:'eventReminder'
@@ -25,6 +25,7 @@ export interface TaskItem {
   createdAt?: string;   // ISO — מתויג אוטומטית ביצירה, משמש כברירת מחדל למיון לפי תאריך כשאין dueDate/תאריך הקשר
   urgent?: boolean;     // ציר "דחוף" של מטריצת אייזנהאואר
   important?: boolean;  // ציר "חשוב" של מטריצת אייזנהאואר
+  donationDate?: string; // dd/MM/yyyy — התאריך של התרומה שיצרה משימת kind:'thankYou' זו (למניעת כפילות)
 }
 
 export type EisenhowerQuadrant = 'do' | 'schedule' | 'delegate' | 'eliminate';
@@ -145,9 +146,57 @@ export function createEventReminderTask(eventName: string, occurrenceDateISO: st
   return stampCreated({ text: `🔔 מחר — ${eventName}`, done: false, kind: 'eventReminder' as const, dueDate: occurrenceDateISO });
 }
 
+export const THANKYOU_BACKFILL_DAYS = 10;
+
+function parseDdMmYyyyLocal(s: string | undefined | null): Date | null {
+  const m = String(s || '').match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+  if (!m) return null;
+  const [, d, mo, y] = m;
+  const yyyy = y.length === 2 ? `20${y}` : y;
+  const dt = new Date(Number(yyyy), Number(mo) - 1, Number(d));
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+// תרומות מה-10 הימים האחרונים (כולל היום) שעדיין אין להן משימת "לשלוח
+// תודה" — לגיבוי רטרואקטיבי חד-פעמי (ראה AppContext, שרץ פעם אחת בלבד לפי
+// דגל ב-localStorage, באותו דפוס כמו backfillLastWeek ב-score.ts). מפגשים
+// (amount<=0) לא נכללים — רק תרומות אמיתיות.
+export function computeMissingThankYouTasks(donations: any[], standaloneTasks: TaskItem[], today: Date): TaskItem[] {
+  const cutoff = new Date(today);
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - (THANKYOU_BACKFILL_DAYS - 1));
+  const existing = new Set(
+    standaloneTasks.filter(t => t.kind === 'thankYou').map(t => `${t.personName}::${t.donationDate}`)
+  );
+  const result: TaskItem[] = [];
+  (donations || []).forEach((d: any) => {
+    if (!d?.name || !((d.amount || 0) > 0)) return;
+    const parsed = parseDdMmYyyyLocal(d.date);
+    if (!parsed || parsed < cutoff || parsed > today) return;
+    const key = `${d.name}::${d.date}`;
+    if (existing.has(key)) return;
+    result.push(createThankYouTask(d.name, d.amount, d.date));
+    existing.add(key);
+  });
+  return result;
+}
+
 // משימת "פגישה עם X" — נוצרת ידנית מכרטיס איש הקשר (ProfileModal).
 export function createMeetingTask(personName: string, dueDate?: string, time?: string): TaskItem {
   return stampCreated({ text: `🤝 פגישה עם ${personName}`, done: false, kind: 'meeting' as const, personName, dueDate, time });
+}
+
+// משימת "לשלוח תודה" — נוצרת אוטומטית בכל תרומה חדשה (ראה addManualDonation
+// ב-AppContext), וגם רטרואקטיבית (חד-פעמי) עבור תרומות מ-10 הימים האחרונים.
+// donationDate משמש למניעת יצירה כפולה לאותה תרומה בדיוק.
+export function createThankYouTask(personName: string, amount: number, donationDate: string): TaskItem {
+  return stampCreated({
+    text: `🙏 לשלוח תודה — ${personName} (₪${amount.toLocaleString()})`,
+    done: false,
+    kind: 'thankYou' as const,
+    personName,
+    donationDate,
+  });
 }
 
 export function addSubtask(task: TaskItem, text: string): TaskItem {

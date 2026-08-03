@@ -15,7 +15,7 @@ import { AppSettings, loadSettings, saveSettings, filterDonorsBySettings } from 
 import { logAction } from '../lib/score';
 import { computeSummarySince, computeDonorTotalSince } from '../lib/donationFilter';
 import { HistoryEntry, buildHistoryEntry, countAttendance, sumBudget, findLatestHistoryFor, tasksFromHistory } from '../lib/history';
-import { STANDALONE_TASKS_ID, createHomeVisitTask, createHolidayReminderTask, createEventReminderTask } from '../lib/tasks';
+import { STANDALONE_TASKS_ID, createHomeVisitTask, createHolidayReminderTask, createEventReminderTask, createThankYouTask, computeMissingThankYouTasks } from '../lib/tasks';
 import { HomeVisitEntry, HomeVisitRound, HomeVisitsData, moveEntry } from '../lib/homeVisits';
 import { buildHolidayList } from '../lib/holidayList';
 import { computeMissingHolidayReminders } from '../lib/holidayAutoTasks';
@@ -104,24 +104,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // ברירת המחדל של "מאיזה תאריך סופרים תרומות" כשלא הוגדר תאריך מפורש
+  // ב-Settings — מתחילת השנה הנוכחית, לא כל הזמנים. משותף לכל הסכומים
+  // המוצגים באפליקציה (דשבורד, דוחות, סכום לכל איש קשר) כדי שיהיו עקביים
+  // זה עם זה — ראה effectiveSummary למטה למקור הבאג שזה מתקן.
+  const effectiveSinceIso = settings.donationsSinceDate || `${new Date().getFullYear()}-01-01`;
+
   const visibleDonors = React.useMemo(() => {
     const filtered = filterDonorsBySettings(donors, crm, settings);
-    if (!settings.donationsSinceDate) return filtered;
     const withFilteredTotals: Record<string, Donor> = {};
     Object.keys(filtered).forEach(name => {
       const d = filtered[name];
-      withFilteredTotals[name] = { ...d, total: computeDonorTotalSince(d.donations, settings.donationsSinceDate) };
+      withFilteredTotals[name] = { ...d, total: computeDonorTotalSince(d.donations, effectiveSinceIso) };
     });
     return withFilteredTotals;
-  }, [donors, crm, settings]);
+  }, [donors, crm, settings, effectiveSinceIso]);
 
-  // כשיש "תאריך התחלה" בהגדרות — מחשבים תקציר בצד הלקוח מתוך רשימת התרומות
-  // הגולמית (במקום סתם להציג את summary מהשרת, שהוא תמיד מתחילת השנה/הכל).
+  // תמיד מחושב בצד הלקוח מתוך רשימת התרומות הגולמית (לא מ-summary הגולמי
+  // מהשרת) — כדי שהמספר יהיה עקבי בין "ברירת מחדל" לבין תאריך מותאם אישית
+  // שהוגדר ב-Settings. בעבר, "ריק" נפל בחזרה ל-summary מהשרת שיכול לחשב
+  // אחרת מ-computeSummarySince (למשל לגבי הו"ק), מה שגרם למספר שונה ולא
+  // עקבי בין "מתחילת השנה" (ברירת מחדל) לבין תאריך מפורש שהוקלד.
   const effectiveSummary = React.useMemo(() => {
-    if (!settings.donationsSinceDate) return summary;
-    const since = computeSummarySince(donations, settings.donationsSinceDate);
-    return { ...(summary || {}), ...since } as ReportSummary;
-  }, [summary, donations, settings.donationsSinceDate]);
+    const computed = computeSummarySince(donations, effectiveSinceIso);
+    return { ...(summary || {}), ...computed } as ReportSummary;
+  }, [summary, donations, effectiveSinceIso]);
 
   const loadHebcal = () => {
     fetch('https://www.hebcal.com/shabbat?cfg=json&city=Afula&M=on')
@@ -307,6 +314,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
     });
     logAction('donation');
+
+    // כל תרומה אמיתית (לא רשומת "מפגש" עם amount<=0) מקבלת אוטומטית משימת
+    // "לשלוח תודה" — כדי שלא תישכח. גיבוי רטרואקטיבי לתרומות ישנות יותר קורה
+    // פעם אחת בלבד ב-useEffect למטה, לא כאן.
+    if (donation.name && (donation.amount || 0) > 0) {
+      setHolidayExtras(prev => {
+        const cur = prev[STANDALONE_TASKS_ID] || {};
+        const next = { ...prev, [STANDALONE_TASKS_ID]: { ...cur, tasks: [...(cur.tasks || []), createThankYouTask(donation.name, donation.amount, donation.date)] } };
+        saveHolidayExtrasCloud(next);
+        return next;
+      });
+      logAction('task_create');
+    }
   };
 
   const updateCrm = (name: string, data: any) => {
@@ -618,6 +638,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, [eventsData, loading]);
+
+  // גיבוי חד-פעמי: יוצר משימות "לשלוח תודה" עבור תרומות מ-10 הימים האחרונים
+  // שנוספו לפני שהפיצ'ר הזה קיים (או הגיעו ישירות מהגיליון בלי לעבור דרך
+  // addManualDonation). רץ פעם אחת בלבד — דגל קבוע ב-localStorage, אותו
+  // דפוס בדיוק כמו backfillLastWeek ב-score.ts.
+  useEffect(() => {
+    if (loading) return;
+    if (localStorage.getItem('thankyou_backfill_v1_done')) return;
+    localStorage.setItem('thankyou_backfill_v1_done', 'true');
+    const missing = computeMissingThankYouTasks(donations, holidayExtras[STANDALONE_TASKS_ID]?.tasks || [], new Date());
+    if (missing.length === 0) return;
+    setHolidayExtras(prev => {
+      const cur = prev[STANDALONE_TASKS_ID] || {};
+      const next = { ...prev, [STANDALONE_TASKS_ID]: { ...cur, tasks: [...(cur.tasks || []), ...missing] } };
+      saveHolidayExtrasCloud(next);
+      return next;
+    });
+  }, [loading, donations, holidayExtras]);
 
   useEffect(() => {
     loadAll();

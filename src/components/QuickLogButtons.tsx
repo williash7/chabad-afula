@@ -14,8 +14,10 @@ function resolvePhone(donorName: string, donors: Record<string, any>, crm: Recor
 // שורת פעולות ליצירת קשר עם איש קשר: התקשרות/וואטסאפ ישירים, ושני כפתורי
 // תיעוד מהיר (טלפון / מפגש) ששומרים מפגש מיד דרך ה-API הקיים (addMeeting),
 // בלי לפתוח שום טופס. משותף לכל מקום שמציג איש קשר שכדאי ליצור איתו קשר
-// (אנשי קשר, משימות).
-export function QuickLogButtons({ donorName, compact = false }: { donorName: string; compact?: boolean }) {
+// (אנשי קשר, משימות). personalDateContext אופציונלי: כשמועבר (מ-TasksTab,
+// לתזכורת יום הולדת/יארצייט ספציפית) — תיעוד מוצלח גם "סוגר" את התזכורת
+// הזו ומציע ליצור משימת המשך (ראה TasksTab.onComplete).
+export function QuickLogButtons({ donorName, compact = false, personalDateContext }: { donorName: string; compact?: boolean; personalDateContext?: { onComplete: () => void } }) {
   const { refresh, donors, crm } = useAppStore();
   const [logged, setLogged] = useState<Record<string, number>>({});
 
@@ -28,6 +30,7 @@ export function QuickLogButtons({ donorName, compact = false }: { donorName: str
     await apiPost('addMeeting', { name: donorName, date: dateStr, meetType, purpose: '', notes: '' });
     logAction('meeting');
     refresh();
+    personalDateContext?.onComplete();
   };
 
   const isRecent = (meetType: string) => !!logged[meetType] && Date.now() - logged[meetType] < 60000;
