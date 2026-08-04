@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Check, ClipboardList, Calendar, CalendarCheck, Cake, X, ChevronLeft, Plus, Clock, ListTodo, SlidersHorizontal, ChevronDown } from 'lucide-react';
+import { Check, ClipboardList, Calendar, CalendarCheck, Cake, X, ChevronLeft, Plus, Clock, ListTodo, SlidersHorizontal, ChevronDown, Home } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
 import { HolidayModal } from './HolidayModal';
 import { TaskDetailsPanel } from './TaskDetailsPanel';
@@ -141,14 +141,21 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     })
   ).filter(g => g.tasks.length > 0);
 
+  // "משימות ביקורי בית" (kind:'homeVisit') חיות באותו מערך אחסון כמו המשימות
+  // החד-פעמיות (STANDALONE_TASKS_ID) — רק מוצגות כאן בקבוצה נפרדת מבחינה
+  // ויזואלית. ה-idx נשאר אינדקס במערך המקורי allStandaloneTasks בשני
+  // המקרים, כדי שהכפתורים ימשיכו להצביע על הפריט הנכון.
   const allStandaloneTasks: any[] = holidayExtras[STANDALONE_TASKS_ID]?.tasks || [];
-  const standaloneTasks = allStandaloneTasks
+  const openStandaloneAll = allStandaloneTasks
     .map((t: any, idx: number) => ({ t, idx, date: effectiveDate(t, null) }))
     .filter((x: any) => !x.t.done)
     .sort((a, b) => compareTasks(a.t, b.t, sortKey, a.date, b.date));
+  const homeVisitTasks = openStandaloneAll.filter(x => x.t.kind === 'homeVisit');
+  const standaloneTasks = openStandaloneAll.filter(x => x.t.kind !== 'homeVisit');
 
   const openHolidayCount = holidayGroups.reduce((s, g) => s + g.tasks.length, 0);
   const openEventCount = eventGroups.reduce((s, g) => s + g.tasks.length, 0);
+  const openHomeVisitCount = homeVisitTasks.length;
   const openStandaloneCount = standaloneTasks.length;
 
   const toggleStandaloneTask = (idx: number) => {
@@ -445,14 +452,14 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     });
   });
 
-  standaloneTasks.forEach(({ t, idx, date }: any) => {
+  [...homeVisitTasks, ...standaloneTasks].forEach(({ t, idx, date }: any) => {
     flatRows.push({
       key: `s-${idx}`,
       date,
       priorityObj: t,
       node: (
         <div key={`s-${idx}`}>
-          <div className="text-[10px] text-[#9B7A2F] font-bold mb-1">📌 חד-פעמית</div>
+          <div className="text-[10px] text-[#9B7A2F] font-bold mb-1">{t.kind === 'homeVisit' ? '🏠 ביקור בית' : '📌 חד-פעמית'}</div>
           {renderTaskItem(
             t,
             t.kind === 'homeVisit' ? () => handleMarkHomeVisitDone(t.roundId, t.personName, t.text) : () => toggleStandaloneTask(idx),
@@ -473,7 +480,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   // כדי שמשימות בלי תאריך אמיתי יופיעו במגירת "ללא תאריך" ולא "יתפסו" תא אקראי.
   interface CalItem {
     key: string; date: Date | null; label: string; done: boolean; t: any;
-    source: 'personal' | 'holiday' | 'event' | 'standalone';
+    source: 'personal' | 'holiday' | 'event' | 'standalone' | 'homeVisit';
     onToggle: () => void; onDelete: () => void; onTogglePerson: (p: string) => void; onPatch: (patch: any) => void; extra?: React.ReactNode;
     customCard?: React.ReactNode;
   }
@@ -523,9 +530,11 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
     });
   });
 
-  standaloneTasks.forEach(({ t, idx }: any) => {
+  [...homeVisitTasks, ...standaloneTasks].forEach(({ t, idx }: any) => {
     calendarItems.push({
-      key: `s-${idx}`, date: t.dueDate ? applyTaskTime(new Date(t.dueDate), t) : null, label: `📌 ${t.text}`, done: !!t.done, t, source: 'standalone',
+      key: `s-${idx}`, date: t.dueDate ? applyTaskTime(new Date(t.dueDate), t) : null,
+      label: t.kind === 'homeVisit' ? `🏠 ${t.text}` : `📌 ${t.text}`, done: !!t.done, t,
+      source: t.kind === 'homeVisit' ? 'homeVisit' : 'standalone',
       onToggle: t.kind === 'homeVisit' ? () => handleMarkHomeVisitDone(t.roundId, t.personName, t.text) : () => toggleStandaloneTask(idx),
       onDelete: () => deleteStandaloneTask(idx), onTogglePerson: p => toggleStandaloneInvitePerson(idx, p),
       onPatch: patch => patchStandaloneTask(idx, patch), extra: standaloneExtraFor(t),
@@ -549,7 +558,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
         </div>
         <div className="flex-1 px-3 md:px-0">
           <div className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#C9A84C]">משימות</div>
-          <div className="text-[11px] text-white/45 mt-[1px]">{openHolidayCount + openEventCount + openStandaloneCount} משימות פתוחות · {personalDates.length} תאריכים ב-30 הימים הקרובים</div>
+          <div className="text-[11px] text-white/45 mt-[1px]">{openHolidayCount + openEventCount + openHomeVisitCount + openStandaloneCount} משימות פתוחות · {personalDates.length} תאריכים ב-30 הימים הקרובים</div>
         </div>
         <button
           onClick={() => setIsControlsOpen(o => !o)}
@@ -746,6 +755,40 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
                 );
               })}
             </div>
+          )}
+        </div>
+
+        {/* משימות ביקורי בית — נפרד ממשימות חד-פעמיות, ניתן לכווץ/להרחיב כמו קבוצות חג/אירוע */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <button onClick={() => setTab('homevisits')} className="font-['Frank_Ruhl_Libre'] text-lg font-bold text-[#0D1B2A] flex items-center gap-2 hover:underline">
+              <Home size={18} className="text-[#C9A84C]" /> משימות ביקורי בית
+            </button>
+            <button onClick={() => toggleGroupCollapse('hv-tasks')} className="flex items-center gap-1 text-[10px] text-gray-400 px-1.5 py-0.5 rounded hover:bg-[#FAF6EE] transition-colors">
+              {homeVisitTasks.length} משימות <ChevronDown size={12} className={`transition-transform ${collapsedGroups.has('hv-tasks') ? '' : 'rotate-180'}`} />
+            </button>
+          </div>
+          {!collapsedGroups.has('hv-tasks') && (
+            homeVisitTasks.length === 0 ? (
+              <div className="bg-white rounded-xl p-4 text-center text-gray-500 shadow-sm text-sm border border-[#EDE6D6]">
+                אין משימות ביקורי בית פתוחות כרגע. נוצרות אוטומטית ממערך ביקורי הבית.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {homeVisitTasks.map(({ t, idx }: any) => (
+                  <div key={idx}>
+                    {renderTaskItem(
+                      t,
+                      () => handleMarkHomeVisitDone(t.roundId, t.personName, t.text),
+                      () => deleteStandaloneTask(idx),
+                      p => toggleStandaloneInvitePerson(idx, p),
+                      patch => patchStandaloneTask(idx, patch),
+                      standaloneExtraFor(t)
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
           )}
         </div>
 
