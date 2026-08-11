@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store/AppContext';
-import { Check, ClipboardList, Calendar, CalendarCheck, Cake, X, ChevronLeft, Plus, Clock, ListTodo, SlidersHorizontal, ChevronDown, Home } from 'lucide-react';
+import { Check, ClipboardList, Calendar, CalendarCheck, Cake, X, ChevronLeft, Plus, Clock, ListTodo, SlidersHorizontal, ChevronDown, Home, Bot } from 'lucide-react';
+import { GlobalAIImportModal } from './GlobalAIImportModal';
 import { ProfileModal } from './ProfileModal';
 import { HolidayModal } from './HolidayModal';
 import { TaskDetailsPanel } from './TaskDetailsPanel';
@@ -30,6 +31,7 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
   const [viewMode, setViewMode] = useState<'grouped' | 'flat' | 'calendar'>(settings.defaultTaskView);
   const [calendarSelectedKey, setCalendarSelectedKey] = useState<string | null>(null);
   const [isControlsOpen, setIsControlsOpen] = useState(false);
+  const [isAIImportOpen, setIsAIImportOpen] = useState(false);
   type CompletionTarget = { kind: 'standalone' } | { kind: 'holiday'; id: string } | { kind: 'event'; id: string } | { kind: 'personal'; key: string };
   const [completionPrompt, setCompletionPrompt] = useState<{ label: string; target: CompletionTarget } | null>(null);
   // כיווץ קבוצות משימות (לפי חג/אירוע) בתצוגה "לפי קטגוריה" — פתוח כברירת
@@ -612,10 +614,15 @@ export function TasksTab({ setTab, addTrigger }: { setTab: (t: string) => void; 
         >
           <SlidersHorizontal size={16} />
         </button>
+        <button onClick={() => setIsAIImportOpen(true)} title="יבוא משימות מבינה מלאכותית" className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-white/10 text-white/80 hover:bg-white/20 transition-colors mr-1.5">
+          <Bot size={16} />
+        </button>
         <button onClick={() => setIsAddOpen(true)} className="w-9 h-9 bg-white/10 rounded-full flex items-center justify-center text-white/80 shrink-0 hover:bg-white/20 transition-colors mr-1.5">
           <Plus size={18} />
         </button>
       </div>
+
+      {isAIImportOpen && <GlobalAIImportModal onClose={() => setIsAIImportOpen(false)} />}
 
       {/* מיון + תצוגה — מכווץ כברירת מחדל, נפתח דרך כפתור הפילטר בטופבר */}
       {isControlsOpen && (
